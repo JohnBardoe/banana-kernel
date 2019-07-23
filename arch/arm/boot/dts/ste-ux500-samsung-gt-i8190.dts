@@ -1,0 +1,228 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/dts-v1/;
+#include "ste-dbx5x0.dtsi"
+#include "ste-href-family-pinctrl.dtsi"
+
+/ {
+	model = "Samsung Galaxy S III mini GT-I8190 (Golden) phone";
+	compatible = "samsung,gt-i8190", "st-ericsson,u8500";
+
+	/* This stablilizes the serial port enumeration */
+	aliases {
+		serial0 = &ux500_serial0;
+		serial1 = &ux500_serial1;
+		serial2 = &ux500_serial2;
+	};
+
+	memory {
+		/* 1 GB memory */
+		device_type = "memory";
+		reg = <0x00000000 0x40000000>;
+	};
+
+	chosen {
+		bootargs = "console=ttyAMA2,115200n8";
+		stdout-path = &ux500_serial2;
+	};
+
+	/* TI TXS0206 level translator for 1.8/2.9 V */
+	vmmci: regulator-gpio {
+		compatible = "regulator-gpio";
+
+		/* GPIO87 EN */
+		gpios = <&gpio2 23 GPIO_ACTIVE_HIGH>;
+
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <2900000>;
+		regulator-name = "mmci-reg";
+		regulator-type = "voltage";
+
+		startup-delay-us = <100>;
+
+		states = <1800000 0x0
+			  2900000 0x1>;
+	};
+
+	/* External LDO for eMMC */
+	ldo_1v8_reg: ldo_1v8 {
+		compatible = "regulator-fixed";
+		regulator-name = "en-1v8-fixed-supply";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		gpio = <&gpio6 31 GPIO_ACTIVE_HIGH>;
+		startup-delay-us = <5000>;
+		enable-active-high;
+	};
+
+	soc {
+		// External Micro SD slot
+		sdi0_per1@80126000 {
+			arm,primecell-periphid = <0x10480180>;
+			max-frequency = <100000000>;
+			bus-width = <4>;
+			cap-sd-highspeed;
+			cap-mmc-highspeed;
+			// sd-uhs-sdr12;
+			// sd-uhs-sdr25;
+			/* All direction control is used */
+			st,sig-dir-cmd;
+			st,sig-dir-dat0;
+			st,sig-dir-dat2;
+			st,sig-dir-dat31;
+			st,sig-pin-fbclk;
+			full-pwr-cycle;
+			vmmc-supply = <&ab8500_ldo_aux3_reg>;
+			vqmmc-supply = <&vmmci>;
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&sdi0_default_mode>;
+			pinctrl-1 = <&sdi0_sleep_mode>;
+			status = "okay";
+		};
+
+		// WLAN SDIO channel
+		sdi1_per2@80118000 {
+			arm,primecell-periphid = <0x10480180>;
+			max-frequency = <100000000>;
+			bus-width = <4>;
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&sdi1_default_mode>;
+			pinctrl-1 = <&sdi1_sleep_mode>;
+
+			status = "okay";
+		};
+
+		// eMMC
+		sdi2_per3@80005000 {
+			arm,primecell-periphid = <0x10480180>;
+		        max-frequency = <100000000>;
+			bus-width = <8>;
+			cap-mmc-highspeed;
+			vmmc-supply = <&ldo_1v8_reg>;
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&sdi2_default_mode>;
+			pinctrl-1 = <&sdi2_sleep_mode>;
+
+			status = "okay";
+		};
+
+		uart@80120000 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&uart0_default_mode>;
+			pinctrl-1 = <&uart0_sleep_mode>;
+			status = "okay";
+		};
+
+		uart@80121000 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&uart1_default_mode>;
+			pinctrl-1 = <&uart1_sleep_mode>;
+			status = "okay";
+		};
+
+		uart@80007000 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&uart2_default_mode>;
+			pinctrl-1 = <&uart2_sleep_mode>;
+			status = "okay";
+		};
+
+		i2c@80122000 {
+			pinctrl-names = "default","sleep";
+			pinctrl-0 = <&i2c1_default_mode>;
+			pinctrl-1 = <&i2c1_sleep_mode>;
+
+			/* USB port switch */
+			fsa880@25 {
+				compatible = "fcs,fsa880";
+				reg = <0x25>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&fsa880_golden_mode>;
+				/* GPIO95 */
+				interrupt-parent = <&gpio2>;
+				interrupts = <31 IRQ_TYPE_EDGE_RISING>;
+			};
+		};
+
+		prcmu@80157000 {
+			cpufreq {
+				status = "okay";
+			};
+
+			thermal@801573c0 {
+				num-trips = <4>;
+
+				trip0-temp = <70000>;
+				trip0-type = "active";
+				trip0-cdev-num = <1>;
+				trip0-cdev-name0 = "thermal-cpufreq-0";
+
+				trip1-temp = <75000>;
+				trip1-type = "active";
+				trip1-cdev-num = <1>;
+				trip1-cdev-name0 = "thermal-cpufreq-0";
+
+				trip2-temp = <80000>;
+				trip2-type = "active";
+				trip2-cdev-num = <1>;
+				trip2-cdev-name0 = "thermal-cpufreq-0";
+
+				trip3-temp = <85000>;
+				trip3-type = "critical";
+				trip3-cdev-num = <0>;
+
+				status = "okay";
+			};
+
+			ab8500 {
+				/* This has the newer AB8505 PMIC */
+				compatible = "stericsson,ab8505";
+			};
+		};
+
+		pinctrl {
+			sdi0 {
+				sdi0_default_mode: sdi0_default {
+					golden_mux {
+						function = "mc0";
+						/* Add the DAT31 pin even if it is not really used */
+						groups = "mc0dat31dir_a_1";
+					};
+					golden_cfg1 {
+						pins = "GPIO21_AB3"; /* DAT31DIR */
+						ste,config = <&out_hi>;
+					};
+					/* level shifter on GPIO87 */
+					golden_cfg2 {
+						pins = "GPIO87_B3";
+						ste,config = <&gpio_out_hi>;
+					};
+				};
+			};
+			sdi2 {
+				sdi2_default_mode: sdi2_default {
+					/* LDO enable on GPIO223 */
+					golden_cfg1 {
+						pins = "GPIO223_AH9";
+						ste,config = <&gpio_out_hi>;
+					};
+				};
+			};
+			fsa880 {
+				fsa880_golden_mode: fsa880_golden {
+					skomer_cfg1 {
+						pins = "GPIO95_E8";
+						ste,config = <&gpio_in_pu>;
+					};
+				};
+			};
+			backlight {
+				backlight_golden_mode: bl_golden {
+					golden_cfg1 {
+						pins = "GPIO69_E2";
+						ste,config = <&gpio_out_hi>;
+					};
+				};
+			};
+		};
+	};
+};
