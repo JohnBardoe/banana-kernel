@@ -25,6 +25,7 @@
 		stdout-path = &ux500_serial2;
 	};
 
+#if 0
 	/* TI TXS0206 level translator for 1.8/2.9 V */
 	vmmci: regulator-gpio {
 		compatible = "regulator-gpio";
@@ -53,8 +54,10 @@
 		startup-delay-us = <5000>;
 		enable-active-high;
 	};
+#endif
 
 	soc {
+#if 0
 		// External Micro SD slot
 		sdi0_per1@80126000 {
 			arm,primecell-periphid = <0x10480180>;
@@ -104,6 +107,11 @@
 
 			status = "okay";
 		};
+#endif
+
+		usb_per5@a03e0000 {
+			status = "disabled";
+		};
 
 		uart@80120000 {
 			pinctrl-names = "default", "sleep";
@@ -126,6 +134,7 @@
 			status = "okay";
 		};
 
+#if 0
 		i2c@80122000 {
 			pinctrl-names = "default","sleep";
 			pinctrl-0 = <&i2c1_default_mode>;
@@ -142,6 +151,7 @@
 				interrupts = <31 IRQ_TYPE_EDGE_RISING>;
 			};
 		};
+#endif
 
 		prcmu@80157000 {
 			cpufreq {
@@ -176,6 +186,7 @@
 			ab8500 {
 				/* This has the newer AB8505 PMIC */
 				compatible = "stericsson,ab8505";
+				status = "disabled";
 			};
 		};
 
