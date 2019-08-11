@@ -21,7 +21,7 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyAMA2,115200n8";
+		bootargs = "earlycon console=ttyAMA2,115200,n8";
 		stdout-path = &ux500_serial2;
 	};
 
