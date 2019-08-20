@@ -3,6 +3,8 @@
  * Copyright 2014 Linaro Ltd.
  */
 
+#include "ste-ab8505.dtsi"
+
 / {
 	soc {
 		prcmu@80157000 {
