@@ -153,6 +153,7 @@ int atags_to_fdt(void *atag_list, void *fdt, int total_space)
 		return ret;
 
 	for_each_tag(atag, atag_list) {
+#if 0
 		if (atag->hdr.tag == ATAG_CMDLINE) {
 			/* Append the ATAGS command line to the device tree
 			 * command line.
@@ -190,7 +191,9 @@ int atags_to_fdt(void *atag_list, void *fdt, int total_space)
 					cpu_to_fdt32(atag->u.mem.size);
 			}
 
-		} else if (atag->hdr.tag == ATAG_INITRD2) {
+		} else
+#endif
+		if (atag->hdr.tag == ATAG_INITRD2) {
 			uint32_t initrd_start, initrd_size;
 			initrd_start = atag->u.initrd.start;
 			initrd_size = atag->u.initrd.size;
