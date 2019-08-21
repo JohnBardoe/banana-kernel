@@ -787,10 +787,12 @@ static const struct mfd_cell ab8505_devs[] = {
 		.name = "abx500-clk",
 		.of_compatible = "stericsson,ab8500-clk",
 	},
+/*
 	{
 		.name = "ab8500-gpadc",
 		.of_compatible = "stericsson,ab8500-gpadc",
 	},
+*/
 	{
 		.name = "ab8500-rtc",
 		.of_compatible = "stericsson,ab8500-rtc",
@@ -817,6 +819,7 @@ static const struct mfd_cell ab8505_devs[] = {
 		.name = "ab8500-usb",
 		.of_compatible = "stericsson,ab8500-usb",
 	},
+/*
 	{
 		.name = "ab8500-codec",
 		.of_compatible = "stericsson,ab8500-codec",
@@ -824,6 +827,7 @@ static const struct mfd_cell ab8505_devs[] = {
 	{
 		.name = "ab-iddet",
 	},
+*/
 };
 
 static const struct mfd_cell ab8540_devs[] = {
@@ -1311,6 +1315,7 @@ static int ab8500_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+#if 0
 	if (!no_bm) {
 		/* Add battery management devices */
 		ret = mfd_add_devices(ab8500->dev, 0, ab8500_bm_devs,
@@ -1319,6 +1324,7 @@ static int ab8500_probe(struct platform_device *pdev)
 		if (ret)
 			dev_err(ab8500->dev, "error adding bm devices\n");
 	}
+#endif
 
 	if (((is_ab8505(ab8500) || is_ab9540(ab8500)) &&
 			ab8500->chip_id >= AB8500_CUT2P0) || is_ab8540(ab8500))
