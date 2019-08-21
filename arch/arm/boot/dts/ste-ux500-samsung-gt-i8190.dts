@@ -2,6 +2,7 @@
 /dts-v1/;
 #include "ste-dbx5x0.dtsi"
 #include "ste-href-family-pinctrl.dtsi"
+#include "ste-href-ab8505.dtsi"
 
 / {
 	model = "Samsung Galaxy S III mini GT-I8190 (Golden) phone";
@@ -21,9 +22,42 @@
 	};
 
 	chosen {
-		bootargs = "earlycon console=ttyAMA2,115200,n8";
+		// console=ttyAMA2,115200,n8
+		// console=tty0
+		bootargs = "earlycon console=tty0 ignore_loglevel root=/dev/ram0 PMOS_NO_OUTPUT_REDIRECT";
 		stdout-path = &ux500_serial2;
+
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		framebuffer@9000000 {
+			compatible = "simple-framebuffer";
+			reg = <0x9000000 (480 * 800 * 4)>;
+			width = <480>;
+			height = <800>;
+			stride = <(480 * 4)>;
+			format = "x8r8g8b8";
+
+			clocks = <&prcmu_clk PRCMU_MCDECLK>, /* Main MCDE clock */
+				 <&prcmu_clk PRCMU_LCDCLK>, /* LCD clock */
+				 <&prcmu_clk PRCMU_PLLDSI>, /* HDMI clock */
+				 <&prcmu_clk PRCMU_DSI0CLK>, <&prcmu_clk PRCMU_DSI0ESCCLK>;
+			//vana-supply = <&ab8500_ldo_ana_reg>;
+		};
 	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		framebuffer@9000000 {
+			reg = <0x9000000 (480 * 800 * 4)>;
+			no-map;
+		};
+	};
+
 
 #if 0
 	/* TI TXS0206 level translator for 1.8/2.9 V */
@@ -57,6 +91,10 @@
 #endif
 
 	soc {
+		gpu@a0300000 {
+			status = "disabled";
+		};
+
 #if 0
 		// External Micro SD slot
 		sdi0_per1@80126000 {
@@ -109,10 +147,7 @@
 		};
 #endif
 
-		usb_per5@a03e0000 {
-			status = "disabled";
-		};
-
+/* TODO
 		uart@80120000 {
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&uart0_default_mode>;
@@ -133,6 +168,7 @@
 			pinctrl-1 = <&uart2_sleep_mode>;
 			status = "okay";
 		};
+*/
 
 #if 0
 		i2c@80122000 {
@@ -182,12 +218,6 @@
 
 				status = "okay";
 			};
-
-			ab8500 {
-				/* This has the newer AB8505 PMIC */
-				compatible = "stericsson,ab8505";
-				status = "disabled";
-			};
 		};
 
 		pinctrl {
@@ -236,4 +266,21 @@
 			};
 		};
 	};
+};
+
+
+// Sensors supply (3v)
+&ab8500_ldo_aux1_reg {
+	regulator-min-microvolt = <3000000>;
+	regulator-max-microvolt = <3300000>;
+};
+
+&ab8500_usb {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&musb_default_mode>;
+	pinctrl-1 = <&musb_sleep_mode>;
+};
+
+&ab8500_ldo_ana_reg {
+	regulator-boot-on;
 };
