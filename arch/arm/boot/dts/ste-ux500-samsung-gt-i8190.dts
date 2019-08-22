@@ -91,10 +91,6 @@
 #endif
 
 	soc {
-		gpu@a0300000 {
-			status = "disabled";
-		};
-
 #if 0
 		// External Micro SD slot
 		sdi0_per1@80126000 {
