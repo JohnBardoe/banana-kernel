@@ -181,6 +181,7 @@ static int s6d7aa0_ltl101at01_enable(struct drm_panel *panel)
 		return 0;
 
 	dev_err(&ctx->dsi->dev, "Enable\n");
+	msleep(200);
 
 	ret = backlight_enable(ctx->backlight);
 	if (ret < 0) {
