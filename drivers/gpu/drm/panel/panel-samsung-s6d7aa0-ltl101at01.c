@@ -147,6 +147,12 @@ static int s6d7aa0_ltl101at01_prepare(struct drm_panel *panel)
 		return ret;
 	}
 
+	ret = backlight_enable(ctx->backlight);
+	if (ret < 0) {
+		dev_err(&ctx->dsi->dev, "Failed to enable backlight: %d\n", ret);
+		return ret;
+	}
+
 	ctx->prepared = true;
 	return 0;
 }
@@ -181,12 +187,6 @@ static int s6d7aa0_ltl101at01_enable(struct drm_panel *panel)
 		return 0;
 
 	dev_err(&ctx->dsi->dev, "Enable\n");
-
-	ret = backlight_enable(ctx->backlight);
-	if (ret < 0) {
-		dev_err(&ctx->dsi->dev, "Failed to enable backlight: %d\n", ret);
-		return ret;
-	}
 
 	ctx->enabled = true;
 	return 0;
