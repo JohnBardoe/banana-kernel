@@ -136,6 +136,8 @@ static int s6d7aa0_ltl101at01_prepare(struct drm_panel *panel)
 	if (ctx->prepared)
 		return 0;
 
+	dev_err(dev, "Prepare\n");
+
 	s6d7aa0_ltl101at01_reset(ctx);
 
 	ret = s6d7aa0_ltl101at01_on(ctx);
@@ -158,6 +160,8 @@ static int s6d7aa0_ltl101at01_unprepare(struct drm_panel *panel)
 	if (!ctx->prepared)
 		return 0;
 
+	dev_err(dev, "Unprepare\n");
+
 	ret = s6d7aa0_ltl101at01_off(ctx);
 	if (ret < 0)
 		dev_err(dev, "Failed to un-initialize panel: %d\n", ret);
@@ -176,6 +180,8 @@ static int s6d7aa0_ltl101at01_enable(struct drm_panel *panel)
 	if (ctx->enabled)
 		return 0;
 
+	dev_err(&ctx->dsi->dev, "Enable\n");
+
 	ret = backlight_enable(ctx->backlight);
 	if (ret < 0) {
 		dev_err(&ctx->dsi->dev, "Failed to enable backlight: %d\n", ret);
@@ -193,6 +199,8 @@ static int s6d7aa0_ltl101at01_disable(struct drm_panel *panel)
 
 	if (!ctx->enabled)
 		return 0;
+
+	dev_err(&ctx->dsi->dev, "Disable\n");
 
 	ret = backlight_disable(ctx->backlight);
 	if (ret < 0) {
@@ -268,6 +276,8 @@ static int dsi_dcs_bl_update_status(struct backlight_device *bl)
 	int ret;
 
 	dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
+
+	dev_err(&dsi->dev, "Update brightness: %d\n", bl->props.brightness);
 
 	ret = mipi_dsi_dcs_set_display_brightness(dsi, bl->props.brightness);
 	if (ret < 0)
