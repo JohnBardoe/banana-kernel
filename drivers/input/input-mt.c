@@ -145,7 +145,7 @@ bool input_mt_report_slot_state(struct input_dev *dev,
 	slot->frame = mt->frame;
 
 	if (!active) {
-		input_event(dev, EV_ABS, ABS_MT_TRACKING_ID, -1);
+		input_mt_report_slot_inactive(dev);
 		return false;
 	}
 

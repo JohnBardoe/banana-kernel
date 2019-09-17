@@ -97,6 +97,11 @@ static inline bool input_is_mt_axis(int axis)
 	return axis == ABS_MT_SLOT || input_is_mt_value(axis);
 }
 
+static inline void input_mt_report_slot_inactive(struct input_dev *dev)
+{
+	input_event(dev, EV_ABS, ABS_MT_TRACKING_ID, -1);
+
+}
 bool input_mt_report_slot_state(struct input_dev *dev,
 				unsigned int tool_type, bool active);
 
