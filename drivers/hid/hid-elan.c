@@ -216,8 +216,7 @@ static void elan_report_mt_slot(struct elan_drvdata *drvdata, u8 *data,
 	bool active = !!data;
 
 	input_mt_slot(input, slot_num);
-	input_mt_report_slot_state(input, MT_TOOL_FINGER, active);
-	if (active) {
+	if (input_mt_report_slot_state(input, MT_TOOL_FINGER, active)) {
 		x = ((data[0] & 0xF0) << 4) | data[1];
 		y = drvdata->max_y -
 		    (((data[0] & 0x07) << 8) | data[2]);

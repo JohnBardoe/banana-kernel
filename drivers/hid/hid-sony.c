@@ -1092,9 +1092,9 @@ static void dualshock4_parse_report(struct sony_sc *sc, u8 *rd, int size)
 
 			active = !(rd[offset] >> 7);
 			input_mt_slot(sc->touchpad, n);
-			input_mt_report_slot_state(sc->touchpad, MT_TOOL_FINGER, active);
 
-			if (active) {
+			if (input_mt_report_slot_state(sc->touchpad,
+				MT_TOOL_FINGER, active)) {
 				input_report_abs(sc->touchpad, ABS_MT_POSITION_X, x);
 				input_report_abs(sc->touchpad, ABS_MT_POSITION_Y, y);
 			}
@@ -1146,9 +1146,9 @@ static void nsg_mrxu_parse_report(struct sony_sc *sc, u8 *rd, int size)
 		y = ((rd[offset+1] & 0xF0) >> 4) | (rd[offset+2] << 4);
 
 		input_mt_slot(sc->touchpad, n);
-		input_mt_report_slot_state(sc->touchpad, MT_TOOL_FINGER, active & 0x03);
 
-		if (active & 0x03) {
+		if (input_mt_report_slot_state(sc->touchpad,
+			MT_TOOL_FINGER, active & 0x03)) {
 			contactx = rd[offset+3] & 0x0F;
 			contacty = rd[offset+3] >> 4;
 			input_report_abs(sc->touchpad, ABS_MT_TOUCH_MAJOR,

@@ -883,8 +883,7 @@ static void synaptics_report_semi_mt_slot(struct input_dev *dev, int slot,
 					  bool active, int x, int y)
 {
 	input_mt_slot(dev, slot);
-	input_mt_report_slot_state(dev, MT_TOOL_FINGER, active);
-	if (active) {
+	if (input_mt_report_slot_state(dev, MT_TOOL_FINGER, active)) {
 		input_report_abs(dev, ABS_MT_POSITION_X, x);
 		input_report_abs(dev, ABS_MT_POSITION_Y, synaptics_invert_y(y));
 	}

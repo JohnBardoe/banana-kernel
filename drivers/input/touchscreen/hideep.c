@@ -693,10 +693,9 @@ static void hideep_report_slot(struct input_dev *input,
 			       const struct hideep_event *event)
 {
 	input_mt_slot(input, event->index & 0x0f);
-	input_mt_report_slot_state(input,
-				   __GET_MT_TOOL_TYPE(event->type),
-				   !(event->flag & HIDEEP_MT_RELEASED));
-	if (!(event->flag & HIDEEP_MT_RELEASED)) {
+	if (input_mt_report_slot_state(input,
+		__GET_MT_TOOL_TYPE(event->type),
+		!(event->flag & HIDEEP_MT_RELEASED))) {
 		input_report_abs(input, ABS_MT_POSITION_X,
 				 le16_to_cpup(&event->x));
 		input_report_abs(input, ABS_MT_POSITION_Y,

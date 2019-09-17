@@ -154,8 +154,7 @@ static bool ili210x_report_events(struct ili210x *priv, u8 *touchdata)
 		}
 
 		input_mt_slot(input, i);
-		input_mt_report_slot_state(input, MT_TOOL_FINGER, touch);
-		if (!touch)
+		if (!input_mt_report_slot_state(input, MT_TOOL_FINGER, touch))
 			continue;
 		touchscreen_report_pos(input, &priv->prop, x, y,
 				       true);

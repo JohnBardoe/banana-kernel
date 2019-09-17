@@ -343,8 +343,7 @@ static void elantech_set_slot(struct input_dev *dev, int slot, bool active,
 			      unsigned int x, unsigned int y)
 {
 	input_mt_slot(dev, slot);
-	input_mt_report_slot_state(dev, MT_TOOL_FINGER, active);
-	if (active) {
+	if (input_mt_report_slot_state(dev, MT_TOOL_FINGER, active)) {
 		input_report_abs(dev, ABS_MT_POSITION_X, x);
 		input_report_abs(dev, ABS_MT_POSITION_Y, y);
 	}
@@ -608,7 +607,7 @@ static void process_packet_status_v4(struct psmouse *psmouse)
 	for (i = 0; i < ETP_MAX_FINGERS; i++) {
 		if ((fingers & (1 << i)) == 0) {
 			input_mt_slot(dev, i);
-			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
+			input_mt_report_slot_inactive(dev);
 		}
 	}
 

@@ -801,9 +801,9 @@ static void raydium_mt_event(struct raydium_data *ts)
 		u8 wx, wy;
 
 		input_mt_slot(ts->input, i);
-		input_mt_report_slot_state(ts->input, MT_TOOL_FINGER, state);
 
-		if (!state)
+		if (!input_mt_report_slot_state(ts->input,
+			MT_TOOL_FINGER, state))
 			continue;
 
 		input_report_abs(ts->input, ABS_MT_POSITION_X,

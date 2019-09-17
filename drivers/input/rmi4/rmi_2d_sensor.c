@@ -76,10 +76,8 @@ void rmi_2d_sensor_abs_report(struct rmi_2d_sensor *sensor,
 	else
 		input_mt_slot(input, slot);
 
-	input_mt_report_slot_state(input, obj->mt_tool,
-				   obj->type != RMI_2D_OBJECT_NONE);
-
-	if (obj->type != RMI_2D_OBJECT_NONE) {
+	if (input_mt_report_slot_state(input, obj->mt_tool,
+		obj->type != RMI_2D_OBJECT_NONE)) {
 		obj->x = sensor->tracking_pos[slot].x;
 		obj->y = sensor->tracking_pos[slot].y;
 

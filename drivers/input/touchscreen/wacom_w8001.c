@@ -155,8 +155,7 @@ static void parse_multi_touch(struct w8001 *w8001)
 		bool touch = data[0] & (1 << i);
 
 		input_mt_slot(dev, i);
-		input_mt_report_slot_state(dev, MT_TOOL_FINGER, touch);
-		if (touch) {
+		if (input_mt_report_slot_state(dev, MT_TOOL_FINGER, touch)) {
 			x = (data[6 * i + 1] << 7) | data[6 * i + 2];
 			y = (data[6 * i + 3] << 7) | data[6 * i + 4];
 			/* data[5,6] and [11,12] is finger capacity */

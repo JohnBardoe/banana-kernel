@@ -1020,8 +1020,7 @@ static int mt_process_slot(struct mt_device *td, struct input_dev *input,
 	}
 
 	input_mt_slot(input, slotnum);
-	input_mt_report_slot_state(input, tool, active);
-	if (active) {
+	if (input_mt_report_slot_state(input, tool, active)) {
 		/* this finger is in proximity of the sensor */
 		int wide = (*slot->w > *slot->h);
 		int major = max(*slot->w, *slot->h);

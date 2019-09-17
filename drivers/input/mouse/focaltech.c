@@ -124,8 +124,7 @@ static void focaltech_report_state(struct psmouse *psmouse)
 		bool active = finger->active && finger->valid;
 
 		input_mt_slot(dev, i);
-		input_mt_report_slot_state(dev, MT_TOOL_FINGER, active);
-		if (active) {
+		if (input_mt_report_slot_state(dev, MT_TOOL_FINGER, active)) {
 			unsigned int clamped_x, clamped_y;
 			/*
 			 * The touchpad might report invalid data, so we clamp

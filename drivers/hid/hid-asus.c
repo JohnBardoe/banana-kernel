@@ -240,9 +240,8 @@ static int asus_report_input(struct asus_drvdata *drvdat, u8 *data, int size)
 						MT_TOOL_PALM : MT_TOOL_FINGER;
 
 		input_mt_slot(drvdat->input, i);
-		input_mt_report_slot_state(drvdat->input, toolType, down);
 
-		if (down) {
+		if (input_mt_report_slot_state(drvdat->input, toolType, down)) {
 			asus_report_contact_down(drvdat, toolType, contactData);
 			contactData += drvdat->tp->contact_size;
 		}

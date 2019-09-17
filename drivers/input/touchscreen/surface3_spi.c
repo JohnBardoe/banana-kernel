@@ -75,8 +75,8 @@ static void surface3_spi_report_touch(struct surface3_ts_data *ts_data,
 		return;
 
 	input_mt_slot(ts_data->input_dev, slot);
-	input_mt_report_slot_state(ts_data->input_dev, MT_TOOL_FINGER, st);
-	if (st) {
+	if (input_mt_report_slot_state(ts_data->input_dev,
+		MT_TOOL_FINGER, st)) {
 		input_report_abs(ts_data->input_dev,
 				 ABS_MT_POSITION_X,
 				 get_unaligned_le16(&finger->x));

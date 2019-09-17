@@ -189,10 +189,9 @@ static int sis_ts_report_contact(struct sis_ts_data *ts, const u8 *data, u8 id)
 		return -ENOENT;
 
 	input_mt_slot(input, slot);
-	input_mt_report_slot_state(input, MT_TOOL_FINGER,
-				   status == SIS_STATUS_DOWN);
 
-	if (status == SIS_STATUS_DOWN) {
+	if (input_mt_report_slot_state(input, MT_TOOL_FINGER,
+		status == SIS_STATUS_DOWN)) {
 		pressure = height = width = 1;
 		if (id != SIS_ALL_IN_ONE_PACKAGE) {
 			if (SIS_PKT_HAS_AREA(id)) {

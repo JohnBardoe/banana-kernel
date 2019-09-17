@@ -344,8 +344,8 @@ static irqreturn_t icn8505_irq(int irq, void *dev_id)
 		bool act = icn8505_touch_active(touch->event);
 
 		input_mt_slot(icn8505->input, touch->slot);
-		input_mt_report_slot_state(icn8505->input, MT_TOOL_FINGER, act);
-		if (!act)
+		if (!input_mt_report_slot_state(icn8505->input,
+			MT_TOOL_FINGER, act))
 			continue;
 
 		touchscreen_report_pos(icn8505->input, &icn8505->prop,

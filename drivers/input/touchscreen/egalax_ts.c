@@ -99,12 +99,11 @@ static irqreturn_t egalax_ts_interrupt(int irq, void *dev_id)
 	}
 
 	input_mt_slot(input_dev, id);
-	input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, down);
 
 	dev_dbg(&client->dev, "%s id:%d x:%d y:%d z:%d",
 		down ? "down" : "up", id, x, y, z);
 
-	if (down) {
+	if (input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, down)) {
 		input_report_abs(input_dev, ABS_MT_POSITION_X, x);
 		input_report_abs(input_dev, ABS_MT_POSITION_Y, y);
 		input_report_abs(input_dev, ABS_MT_PRESSURE, z);

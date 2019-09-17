@@ -178,9 +178,9 @@ static void mms114_process_mt(struct mms114_data *data, struct mms114_touch *tou
 		x, y, touch->width, touch->strength);
 
 	input_mt_slot(input_dev, id);
-	input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, touch->pressed);
 
-	if (touch->pressed) {
+	if (input_mt_report_slot_state(input_dev,
+		MT_TOOL_FINGER, touch->pressed)) {
 		touchscreen_report_pos(input_dev, &data->props, x, y, true);
 		input_report_abs(input_dev, ABS_MT_TOUCH_MAJOR, touch->width);
 		input_report_abs(input_dev, ABS_MT_PRESSURE, touch->strength);

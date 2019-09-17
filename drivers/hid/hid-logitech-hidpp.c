@@ -2295,9 +2295,8 @@ static void wtp_touch_event(struct hidpp_device *hidpp,
 	slot = input_mt_get_slot_by_key(hidpp->input, touch_report->finger_id);
 
 	input_mt_slot(hidpp->input, slot);
-	input_mt_report_slot_state(hidpp->input, MT_TOOL_FINGER,
-					touch_report->contact_status);
-	if (touch_report->contact_status) {
+	if (input_mt_report_slot_state(hidpp->input, MT_TOOL_FINGER,
+		touch_report->contact_status)) {
 		input_event(hidpp->input, EV_ABS, ABS_MT_POSITION_X,
 				touch_report->x);
 		input_event(hidpp->input, EV_ABS, ABS_MT_POSITION_Y,
