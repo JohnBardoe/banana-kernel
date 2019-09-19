@@ -432,20 +432,8 @@ static void dsi_mgr_bridge_pre_enable(struct drm_bridge *bridge)
 		}
 	}
 
-	if (panel) {
-		ret = drm_panel_enable(panel);
-		if (ret) {
-			pr_err("%s: enable panel %d failed, %d\n", __func__, id,
-									ret);
-			goto panel_en_fail;
-		}
-	}
-
 	return;
 
-panel_en_fail:
-	if (is_dual_dsi && msm_dsi1)
-		msm_dsi_host_disable(msm_dsi1->host);
 host1_en_fail:
 	msm_dsi_host_disable(host);
 host_en_fail:
@@ -464,6 +452,26 @@ phy_en_fail:
 
 static void dsi_mgr_bridge_enable(struct drm_bridge *bridge)
 {
+	int id = dsi_mgr_bridge_get_id(bridge);
+	struct msm_dsi *msm_dsi = dsi_mgr_get_dsi(id);
+	struct msm_dsi *msm_dsi1 = dsi_mgr_get_dsi(DSI_1);
+	struct drm_panel *panel = msm_dsi->panel;
+	bool is_dual_dsi = IS_DUAL_DSI();
+	int ret;
+
+	if (panel) {
+		ret = drm_panel_enable(panel);
+		if (ret) {
+			pr_err("%s: enable panel %d failed, %d\n", __func__, id,
+									ret);
+			goto panel_en_fail;
+		}
+	}
+
+panel_en_fail:
+	if (is_dual_dsi && msm_dsi1)
+		msm_dsi_host_disable(msm_dsi1->host);
+
 	DBG("");
 }
 
