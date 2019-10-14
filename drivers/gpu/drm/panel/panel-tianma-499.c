@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* 
+/*
  * Copyright (c) 2013, The Linux Foundation. All rights reserved.
  * Copyright (c) 2016, Motorola Mobility LLC. All rights reserved.
  */
@@ -19,6 +19,7 @@ struct tianma_499 {
 	struct mipi_dsi_device *dsi;
 	struct backlight_device *backlight;
 	struct gpio_desc *reset_gpio;
+	struct gpio_desc *backlight_gpio;
 
 	bool prepared;
 	bool enabled;
@@ -223,13 +224,11 @@ static const struct drm_panel_funcs tianma_499_panel_funcs = {
 	.get_modes = tianma_499_get_modes,
 };
 
-static int dsi_dcs_bl_update_status(struct backlight_device *bl)
+static int tianma_499_send_brightness(struct mipi_dsi_device *dsi, u16 brightness)
 {
-	struct mipi_dsi_device *dsi = bl_get_data(bl);
-	u16 brightness = bl->props.brightness;
+	ssize_t err;
 	u8 data[] = { MIPI_DCS_SET_DISPLAY_BRIGHTNESS,
 		      (brightness & 0xf00) >> 8, brightness & 0xff };
-	ssize_t err;
 
 	dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
 
@@ -240,6 +239,23 @@ static int dsi_dcs_bl_update_status(struct backlight_device *bl)
 	dsi->mode_flags |= MIPI_DSI_MODE_LPM;
 
 	return 0;
+}
+
+static int dsi_dcs_bl_update_status(struct backlight_device *bl)
+{
+	struct mipi_dsi_device *dsi = bl_get_data(bl);
+	struct tianma_499 *ctx = mipi_dsi_get_drvdata(dsi);
+	u16 brightness = bl->props.brightness;
+
+	if (bl->props.power != FB_BLANK_UNBLANK ||
+	    bl->props.fb_blank != FB_BLANK_UNBLANK ||
+	    bl->props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK))
+		brightness = 0;
+
+	dev_err(&dsi->dev, "Updating GPIO: %d\n", !!brightness);
+	gpiod_set_value_cansleep(ctx->backlight_gpio, !!brightness);
+
+	return tianma_499_send_brightness(dsi, brightness);
 }
 
 static const struct backlight_ops dsi_bl_ops = {
@@ -275,6 +291,13 @@ static int tianma_499_probe(struct mipi_dsi_device *dsi)
 	if (IS_ERR(ctx->reset_gpio)) {
 		ret = PTR_ERR(ctx->reset_gpio);
 		dev_err(dev, "Failed to get reset-gpios: %d\n", ret);
+		return ret;
+	}
+
+	ctx->backlight_gpio = devm_gpiod_get(dev, "backlight", GPIOD_OUT_LOW);
+	if (IS_ERR(ctx->backlight_gpio)) {
+		ret = PTR_ERR(ctx->backlight_gpio);
+		dev_err(dev, "Failed to get backlight-gpios: %d\n", ret);
 		return ret;
 	}
 
