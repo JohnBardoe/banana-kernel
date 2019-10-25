@@ -1,0 +1,227 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/dts-v1/;
+
+#include "ste-dbx5x0.dtsi"
+#include "ste-href-family-pinctrl.dtsi"
+#include "ste-href-ab8505.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	model = "Samsung Galaxy S III Mini (GT-I8190)";
+	compatible = "samsung,golden", "st-ericsson,u8500";
+
+	/* This stablilizes the serial port enumeration */
+	aliases {
+		serial0 = &ux500_serial0;
+		serial1 = &ux500_serial1;
+		serial2 = &ux500_serial2;
+	};
+
+	chosen {
+		stdout-path = &ux500_serial2;
+	};
+
+	/* TI TXS0206-29 level translator for 1.8/2.9 V */
+	vmmci: regulator-vmmci {
+		compatible = "regulator-gpio";
+
+		/* GPIO87 EN */
+		gpios = <&gpio2 23 GPIO_ACTIVE_HIGH>;
+
+		regulator-name = "mmci-reg";
+		regulator-type = "voltage";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <2900000>;
+
+		startup-delay-us = <200>;
+
+		states = <1800000 0x0
+			  2900000 0x1>;
+	};
+
+	/* External LDO for eMMC */
+	vmem_3v3_reg: regulator-vmem {
+		compatible = "regulator-fixed";
+
+		regulator-name = "vmem-3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		startup-delay-us = <200>;
+
+		/* GPIO223 CE */
+		gpio = <&gpio6 31 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_keys_default_mode>;
+
+		label = "GPIO Buttons";
+
+		volume-up {
+			label = "Volume Up";
+			/* GPIO67 */
+			gpios = <&gpio2 3 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEUP>;
+		};
+
+		volume-down {
+			label = "Volume Down";
+			/* GPIO92 */
+			gpios = <&gpio2 28 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEDOWN>;
+		};
+
+		home {
+			label = "Home";
+			/* GPIO91 */
+			gpios = <&gpio2 27 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_HOMEPAGE>;
+		};
+	};
+
+	soc {
+		// External Micro SD slot
+		sdi0_per1@80126000 {
+			arm,primecell-periphid = <0x10480180>;
+			max-frequency = <100000000>;
+			bus-width = <4>;
+			cap-sd-highspeed;
+			cap-mmc-highspeed;
+			sd-uhs-sdr12;
+			sd-uhs-sdr25;
+			/* All direction control is used */
+			st,sig-dir-cmd;
+			st,sig-dir-dat0;
+			st,sig-dir-dat2;
+			st,sig-dir-dat31;
+			st,sig-pin-fbclk;
+			full-pwr-cycle;
+			vmmc-supply = <&ab8500_ldo_aux3_reg>;
+			vqmmc-supply = <&vmmci>;
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&sdi0_default_mode>;
+			pinctrl-1 = <&sdi0_sleep_mode>;
+			status = "okay";
+		};
+
+		// WLAN SDIO channel
+		sdi1_per2@80118000 {
+			arm,primecell-periphid = <0x10480180>;
+			max-frequency = <100000000>;
+			bus-width = <4>;
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&sdi1_default_mode>;
+			pinctrl-1 = <&sdi1_sleep_mode>;
+
+			status = "okay";
+		};
+
+		// eMMC
+		sdi2_per3@80005000 {
+			arm,primecell-periphid = <0x10480180>;
+			max-frequency = <100000000>;
+			bus-width = <8>;
+			cap-mmc-highspeed;
+			vmmc-supply = <&vmem_3v3_reg>;
+
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&sdi2_default_mode>;
+			pinctrl-1 = <&sdi2_sleep_mode>;
+
+			status = "okay";
+		};
+
+		/* BT UART */
+		uart@80120000 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&uart0_default_mode>;
+			pinctrl-1 = <&uart0_sleep_mode>;
+			status = "okay";
+		};
+
+		/* GPS UART */
+		uart@80121000 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&uart1_default_mode>;
+			pinctrl-1 = <&uart1_sleep_mode>;
+			status = "okay";
+		};
+
+		/* Debugging console UART */
+		uart@80007000 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&uart2_default_mode>;
+			pinctrl-1 = <&uart2_sleep_mode>;
+			status = "okay";
+		};
+
+		prcmu@80157000 {
+			cpufreq {
+				status = "okay";
+			};
+
+			ab8505 {
+				ab8500_usb {
+					pinctrl-names = "default", "sleep";
+					pinctrl-0 = <&musb_default_mode>;
+					pinctrl-1 = <&musb_sleep_mode>;
+				};
+
+				ab8500-regulators {
+					/* Sensors supply */
+					ab8500_ldo_aux1 {
+						regulator-min-microvolt = <3000000>;
+						regulator-max-microvolt = <3300000>;
+					};
+				};
+			};
+		};
+
+		pinctrl {
+			gpio-keys {
+				gpio_keys_default_mode: gpio_keys_default {
+					golden_cfg1 {
+						pins = "GPIO67", /* VOL_UP */
+						       "GPIO91", /* HOME_KEY */
+						       "GPIO92"; /* VOL_DOWN */
+						ste,config = <&gpio_in_pu>;
+					};
+				};
+			};
+
+			sdi0 {
+				sdi0_default_mode: sdi0_default {
+					golden_mux {
+						function = "mc0";
+						/* Add the DAT31 pin even if it is not really used */
+						groups = "mc0dat31dir_a_1";
+					};
+					golden_cfg1 {
+						pins = "GPIO21_AB3"; /* DAT31DIR */
+						ste,config = <&out_hi>;
+					};
+					/* level shifter on GPIO87 */
+					golden_cfg2 {
+						pins = "GPIO87_B3";
+						ste,config = <&gpio_out_hi>;
+					};
+				};
+			};
+			sdi2 {
+				sdi2_default_mode: sdi2_default {
+					/* LDO enable on GPIO223 */
+					golden_cfg1 {
+						pins = "GPIO223_AH9";
+						ste,config = <&gpio_out_hi>;
+					};
+				};
+			};
+		};
+	};
+};
