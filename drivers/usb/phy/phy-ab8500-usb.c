@@ -108,7 +108,8 @@ enum ab8500_usb_mode {
 	USB_IDLE = 0,
 	USB_PERIPHERAL,
 	USB_HOST,
-	USB_DEDICATED_CHG
+	USB_DEDICATED_CHG,
+	USB_UART
 };
 
 /* Register USB_LINK_STATUS interrupt */
@@ -393,6 +394,16 @@ static int ab8505_usb_link_status_update(struct ab8500_usb *ab,
 		usb_phy_set_event(&ab->phy, USB_EVENT_CHARGER);
 		break;
 
+	case USB_LINK_SAMSUNG_UART_CBL_PHY_EN_8505:
+	case USB_LINK_SAMSUNG_UART_CBL_PHY_DISB_8505:
+		if (ab->mode == USB_IDLE) {
+			/* TODO: Explicitly mux UART to USB here */
+			ab->mode = USB_UART;
+			ab8500_usb_peri_phy_en(ab);
+		}
+
+		break;
+
 	default:
 		break;
 	}
@@ -564,6 +575,12 @@ static irqreturn_t ab8500_usb_disconnect_irq(int irq, void *data)
 		ab->mode = USB_IDLE;
 		ab->phy.otg->default_a = false;
 		ab->vbus_draw = 0;
+	}
+
+	/* TODO: This does not actually ever trigger */
+	if (ab->mode == USB_UART) {
+		ab8500_usb_peri_phy_dis(ab);
+		ab->mode = USB_IDLE;
 	}
 
 	if (is_ab8500_2p0(ab->ab8500)) {
