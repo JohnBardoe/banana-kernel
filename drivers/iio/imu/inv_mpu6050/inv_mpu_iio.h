@@ -145,6 +145,7 @@ struct inv_mpu6050_state {
 	s64 chip_period;
 	s64 it_timestamp;
 	s64 data_timestamp;
+	struct regulator *vdd_supply;
 	struct regulator *vddio_supply;
 };
 

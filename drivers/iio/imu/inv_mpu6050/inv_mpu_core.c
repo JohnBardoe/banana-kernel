@@ -1029,10 +1029,18 @@ static int inv_mpu_core_enable_regulator(struct inv_mpu6050_state *st)
 {
 	int result;
 
-	result = regulator_enable(st->vddio_supply);
+	result = regulator_enable(st->vdd_supply);
 	if (result) {
 		dev_err(regmap_get_device(st->map),
-			"Failed to enable regulator: %d\n", result);
+			"Failed to enable vdd regulator: %d\n", result);
+		return result;
+	}
+
+	result = regulator_enable(st->vddio_supply);
+	if (result) {
+		regulator_disable(st->vdd_supply);
+		dev_err(regmap_get_device(st->map),
+			"Failed to enable vddio regulator: %d\n", result);
 	} else {
 		/* Give the device a little bit of time to start up. */
 		usleep_range(35000, 70000);
@@ -1043,14 +1051,23 @@ static int inv_mpu_core_enable_regulator(struct inv_mpu6050_state *st)
 
 static int inv_mpu_core_disable_regulator(struct inv_mpu6050_state *st)
 {
-	int result;
+	int result, error = 0;
+
+	result = regulator_disable(st->vdd_supply);
+	if (result) {
+		error = result;
+		dev_err(regmap_get_device(st->map),
+			"Failed to disable vdd regulator: %d\n", result);
+	}
 
 	result = regulator_disable(st->vddio_supply);
-	if (result)
+	if (result) {
+		error = result;
 		dev_err(regmap_get_device(st->map),
-			"Failed to disable regulator: %d\n", result);
+			"Failed to disable vddio regulator: %d\n", result);
+	}
 
-	return result;
+	return error;
 }
 
 static void inv_mpu_core_disable_regulator_action(void *_data)
@@ -1122,6 +1139,15 @@ int inv_mpu_core_probe(struct regmap *regmap, int irq, const char *name,
 		dev_err(dev, "Invalid interrupt type 0x%x specified\n",
 			irq_type);
 		return -EINVAL;
+	}
+
+	st->vdd_supply = devm_regulator_get(dev, "vdd");
+	if (IS_ERR(st->vdd_supply)) {
+		if (PTR_ERR(st->vdd_supply) != -EPROBE_DEFER)
+			dev_err(dev, "Failed to get vdd regulator %d\n",
+				(int)PTR_ERR(st->vdd_supply));
+
+		return PTR_ERR(st->vdd_supply);
 	}
 
 	st->vddio_supply = devm_regulator_get(dev, "vddio");
