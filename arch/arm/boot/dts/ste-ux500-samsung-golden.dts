@@ -161,6 +161,22 @@
 			status = "okay";
 		};
 
+		i2c@80110000 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&i2c3_default_mode>;
+			pinctrl-1 = <&i2c3_sleep_mode>;
+
+			touch@4a {
+				compatible = "atmel,maxtouch";
+				reg = <0x4a>;
+				interrupt-parent = <&gpio6>;
+				interrupts = <26 IRQ_TYPE_EDGE_FALLING>;
+
+				pinctrl-names = "default";
+				pinctrl-0 = <&tsp_default_mode>;
+			};
+		};
+
 		prcmu@80157000 {
 			cpufreq {
 				status = "okay";
@@ -178,6 +194,20 @@
 					ab8500_ldo_aux1 {
 						regulator-min-microvolt = <3000000>;
 						regulator-max-microvolt = <3300000>;
+					};
+
+					/* Touch screen supply (VREG_TSP_A3V3) */
+					ab8500_ldo_aux2 {
+						regulator-always-on; /* TODO */
+						regulator-min-microvolt = <3300000>;
+						regulator-max-microvolt = <3300000>;
+					};
+
+					/* Touch screen supply (VREG_TSP_1V8) */
+					ab8500_ldo_aux5 {
+						regulator-always-on; /* TODO */
+						regulator-min-microvolt = <1800000>;
+						regulator-max-microvolt = <1800000>;
 					};
 				};
 			};
@@ -219,6 +249,15 @@
 					golden_cfg1 {
 						pins = "GPIO223_AH9";
 						ste,config = <&gpio_out_hi>;
+					};
+				};
+			};
+
+			tsp {
+				tsp_default_mode: tsp_default {
+					golden_cfg1 {
+						pins = "GPIO218_AH11";
+						ste,config = <&gpio_in_nopull>;
 					};
 				};
 			};
