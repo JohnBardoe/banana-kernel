@@ -161,6 +161,29 @@
 			status = "okay";
 		};
 
+		i2c@80128000 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&i2c2_default_mode>;
+			pinctrl-1 = <&i2c2_sleep_mode>;
+
+			mpu6050@68 {
+				compatible = "invensense,mpu6050";
+				reg = <0x68>;
+				interrupt-parent = <&gpio6>;
+				interrupts = <14 IRQ_TYPE_EDGE_RISING>;
+
+				mount-matrix = "0", "1", "0",
+					      "-1", "0", "0",
+					       "0", "0", "1";
+
+				vdd-supply = <&ab8500_ldo_aux1_reg>;
+				vddio-supply = <&ab8500_ldo_aux8_reg>;
+
+				pinctrl-names = "default";
+				pinctrl-0 = <&imu_default_mode>;
+			};
+		};
+
 		i2c@80110000 {
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&i2c3_default_mode>;
@@ -249,6 +272,15 @@
 					golden_cfg1 {
 						pins = "GPIO223_AH9";
 						ste,config = <&gpio_out_hi>;
+					};
+				};
+			};
+
+			imu {
+				imu_default_mode: imu_default {
+					golden_cfg1 {
+						pins = "GPIO206_AG24";
+						ste,config = <&gpio_in_pd>;
 					};
 				};
 			};
