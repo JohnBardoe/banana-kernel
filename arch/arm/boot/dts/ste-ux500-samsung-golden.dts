@@ -20,6 +20,35 @@
 
 	chosen {
 		stdout-path = &ux500_serial2;
+
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		framebuffer@9000000 {
+			compatible = "simple-framebuffer";
+			reg = <0x9000000 (480 * 800 * 4)>;
+			width = <480>;
+			height = <800>;
+			stride = <(480 * 4)>;
+			format = "x8r8g8b8";
+			clocks = <&prcmu_clk PRCMU_MCDECLK>, /* Main MCDE clock */
+				 <&prcmu_clk PRCMU_LCDCLK>, /* LCD clock */
+				 <&prcmu_clk PRCMU_PLLDSI>, /* HDMI clock */
+				 <&prcmu_clk PRCMU_DSI0CLK>, <&prcmu_clk PRCMU_DSI0ESCCLK>;
+			vana-supply = <&ab8500_ldo_ana_reg>;
+		};
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		framebuffer@9000000 {
+			reg = <0x9000000 (480 * 800 * 4)>;
+			no-map;
+		};
 	};
 
 	/* TI TXS0206-29 level translator for 1.8/2.9 V */
