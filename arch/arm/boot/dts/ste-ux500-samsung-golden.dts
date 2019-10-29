@@ -181,6 +181,16 @@
 			pinctrl-0 = <&uart0_default_mode>;
 			pinctrl-1 = <&uart0_sleep_mode>;
 			status = "okay";
+
+			bluetooth {
+				compatible = "brcm,bcm4330-bt";
+				shutdown-gpios = <&gpio6 30 GPIO_ACTIVE_HIGH>;
+				device-wakeup-gpios = <&gpio6 7 GPIO_ACTIVE_HIGH>;
+				host-wakeup-gpios = <&gpio3 1 GPIO_ACTIVE_HIGH>;
+
+				pinctrl-names = "default";
+				pinctrl-0 = <&bluetooth_default_mode>;
+			};
 		};
 
 		/* GPS UART */
@@ -343,6 +353,20 @@
 					golden_cfg1 {
 						pins = "GPIO215_AH13";
 						ste,config = <&gpio_out_lo>;
+					};
+				};
+			};
+
+			bluetooth {
+				bluetooth_default_mode: bluetooth_default {
+					golden_cfg1 {
+						pins = "GPIO199_AH23",
+						       "GPIO222_AJ9";
+						ste,config = <&gpio_out_lo>;
+					};
+					golden_cfg2 {
+						pins = "GPIO97_D9";
+						ste,config = <&gpio_in_nopull>;
 					};
 				};
 			};
