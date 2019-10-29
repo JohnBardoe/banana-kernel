@@ -55,6 +55,23 @@
 		enable-active-high;
 	};
 
+	wlan_en: regulator-wlan-en {
+		compatible = "regulator-fixed";
+
+		regulator-name = "wl-reg-on";
+		regulator-min-microvolt = <3000000>;
+		regulator-max-microvolt = <3000000>;
+
+		startup-delay-us = <200000>;
+
+		/* GPIO215 WLAN_EN */
+		gpio = <&gpio6 23 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&wlan_en_default_mode>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 
@@ -113,13 +130,34 @@
 		// WLAN SDIO channel
 		sdi1_per2@80118000 {
 			arm,primecell-periphid = <0x10480180>;
-			max-frequency = <100000000>;
+			max-frequency = <50000000>;
 			bus-width = <4>;
+			non-removable;
+			cap-sd-highspeed;
+			vmmc-supply = <&wlan_en>;
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&sdi1_default_mode>;
 			pinctrl-1 = <&sdi1_sleep_mode>;
 
+			/* FIXME: Some transfers get stuck with DMA */
+			/delete-property/ dmas;
+			/delete-property/ dma-names;
+
 			status = "okay";
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			wifi@1 {
+				compatible = "brcm,bcm4329-fmac";
+				reg = <1>;
+				interrupt-parent = <&gpio6>;
+				interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
+				interrupt-names = "host-wake";
+
+				pinctrl-names = "default";
+				pinctrl-0 = <&wlan_default_mode>;
+			};
 		};
 
 		// eMMC
@@ -290,6 +328,21 @@
 					golden_cfg1 {
 						pins = "GPIO218_AH11";
 						ste,config = <&gpio_in_nopull>;
+					};
+				};
+			};
+
+			wlan {
+				wlan_default_mode: wlan_default {
+					golden_cfg1 {
+						pins = "GPIO216_AG12";
+						ste,config = <&gpio_in_pd>;
+					};
+				};
+				wlan_en_default_mode: wlan_en_default {
+					golden_cfg1 {
+						pins = "GPIO215_AH13";
+						ste,config = <&gpio_out_lo>;
 					};
 				};
 			};
