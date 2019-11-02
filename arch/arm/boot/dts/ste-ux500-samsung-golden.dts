@@ -313,6 +313,16 @@
 			};
 		};
 
+		msp1: msp@80124000 {
+			pinctrl-names = "default";
+			pinctrl-0 = <&msp1_default_mode>;
+			status = "okay";
+		};
+
+		msp3: msp@80125000 {
+			status = "okay";
+		};
+
 		pinctrl {
 			gpio-keys {
 				gpio_keys_default_mode: gpio_keys_default {

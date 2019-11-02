@@ -8,6 +8,7 @@
  *
  * License terms:
  */
+#define DEBUG
 
 #include <asm/page.h>
 
@@ -128,7 +129,9 @@ static const struct snd_dmaengine_pcm_config ux500_dmaengine_pcm_config = {
 };
 
 static const struct snd_dmaengine_pcm_config ux500_dmaengine_of_pcm_config = {
+	.pcm_hardware = &ux500_pcm_hw,
 	.compat_request_channel = ux500_pcm_request_chan,
+	.prealloc_buffer_size = 128 * 1024,
 	.prepare_slave_config = ux500_pcm_prepare_slave_config,
 };
 

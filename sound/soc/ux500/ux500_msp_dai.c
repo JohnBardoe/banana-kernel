@@ -8,6 +8,7 @@
  *
  * License terms:
  */
+#define DEBUG
 
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -674,7 +675,9 @@ static int ux500_msp_dai_of_probe(struct snd_soc_dai *dai)
 		return -ENOMEM;
 
 	playback_dma_data->addr = drvdata->msp->playback_dma_data.tx_rx_addr;
+	playback_dma_data->chan_name = "tx";
 	capture_dma_data->addr = drvdata->msp->capture_dma_data.tx_rx_addr;
+	capture_dma_data->chan_name = "rx";
 
 	playback_dma_data->maxburst = 4;
 	capture_dma_data->maxburst = 4;

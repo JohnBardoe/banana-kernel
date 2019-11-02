@@ -7,6 +7,7 @@
  *
  * License terms:
  */
+#define DEBUG
 
 #include <asm/mach-types.h>
 

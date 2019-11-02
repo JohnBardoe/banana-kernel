@@ -16,6 +16,8 @@
  * License terms:
  */
 
+#define DEBUG
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/device.h>
@@ -122,6 +124,7 @@ struct ab8500_codec_drvdata_dbg {
 
 /* Private data for AB8500 device-driver */
 struct ab8500_codec_drvdata {
+	struct ab8500 *ab8500;
 	struct regmap *regmap;
 	struct mutex ctrl_lock;
 
@@ -236,6 +239,46 @@ static const struct snd_kcontrol_new dapm_HFr_select[] = {
 	SOC_DAPM_ENUM("Speaker Right Source", dapm_enum_HFr_sel),
 };
 
+/* DA1/DA4 to HfR selector control */
+static const char * const enum_da_hfr_sel[] = {"DA4", "DA1"};
+static SOC_ENUM_SINGLE_DECL(dapm_enum_da_hfr_sel, AB8505_PDMCTRL,
+		AB8505_PDMCTRL_D1TOHFR, enum_da_hfr_sel);
+static const struct snd_kcontrol_new dapm_da_hfr_select[] = {
+	SOC_DAPM_ENUM("Speaker Right Select", dapm_enum_da_hfr_sel),
+};
+
+/* DA3/DA5 to HFl selector control (ab8505 v1) */
+static const char * const enum_da_hfl_sel_v1[] = {"DA3", "DA5"};
+static SOC_ENUM_SINGLE_DECL(dapm_enum_da_hfl_sel_v1, AB8505_PDMCTRL,
+		AB8505_PDMCTRL_D5TOHFL, enum_da_hfl_sel_v1);
+static const struct snd_kcontrol_new dapm_da_hfl_select_v1[] = {
+	SOC_DAPM_ENUM("Speaker Left Select", dapm_enum_da_hfl_sel_v1),
+};
+
+/* DA3/DA5 to HFl selector control (ab8505 v2) */
+static const char * const enum_da_hfl_sel_v2[] = {"DA3", "DA6"};
+static SOC_ENUM_SINGLE_DECL(dapm_enum_da_hfl_sel_v2, AB8505_PDMCTRL,
+		AB8505_PDMCTRL_D6TOHFL, enum_da_hfl_sel_v2);
+static const struct snd_kcontrol_new dapm_da_hfl_select_v2[] = {
+	SOC_DAPM_ENUM("Speaker Left Select", dapm_enum_da_hfl_sel_v2),
+};
+
+/* HFR/EPWM1 to HFR driver route */
+static const char * const enum_hfr2_sel[] = {"Speaker Right", "EPWM 1"};
+static SOC_ENUM_SINGLE_DECL(dapm_enum_hfr2_sel, AB8505_EPWM1CONF,
+		AB8505_EPWM1CONF_TOHFR, enum_hfr2_sel);
+static const struct snd_kcontrol_new dapm_hfr2_select[] = {
+	SOC_DAPM_ENUM("Speaker Right Select 2", dapm_enum_hfr2_sel),
+};
+
+/* HFL/EPWM2 to HFL driver route */
+static const char * const enum_hfl2_sel[] = {"Speaker Left", "EPWM 2"};
+static SOC_ENUM_SINGLE_DECL(dapm_enum_hfl2_sel, AB8505_EPWM2CONF,
+		AB8505_EPWM2CONF_TOHFL, enum_hfl2_sel);
+static const struct snd_kcontrol_new dapm_hfl2_select[] = {
+	SOC_DAPM_ENUM("Speaker Left Select 2", dapm_enum_hfl2_sel),
+};
+
 /* Mic 1 */
 
 /* Mic 1 - Mic 1a or 1b selector */
@@ -296,6 +339,15 @@ static SOC_ENUM_SINGLE_DECL(dapm_enum_ad2_sel, AB8500_DIGMULTCONF1,
 			AB8500_DIGMULTCONF1_AD2SEL, enum_ad2_sel);
 static const struct snd_kcontrol_new dapm_ad2_select[] = {
 	SOC_DAPM_ENUM("AD2 Source Select", dapm_enum_ad2_sel),
+};
+
+/* USB Mic */
+static const char * const enum_usbmic_sel[] = {"None", "USBSWCAP",
+					"USB DP", "USB ID"};
+static SOC_ENUM_SINGLE_DECL(dapm_enum_usbmic_sel, AB8505_EARGAINMICSEL,
+		AB8505_EARGAINMICSEL_USBMICSEL_SHIFT, enum_usbmic_sel);
+static const struct snd_kcontrol_new dapm_usbmic_select[] = {
+	SOC_DAPM_ENUM("USB Mic Source", dapm_enum_usbmic_sel),
 };
 
 
@@ -369,7 +421,7 @@ static const struct snd_kcontrol_new dapm_pwm2vib2[] = {
  * DAPM-widgets
  */
 
-static const struct snd_soc_dapm_widget ab8500_dapm_widgets[] = {
+static const struct snd_soc_dapm_widget ab850x_dapm_widgets[] = {
 
 	/* Clocks */
 	SND_SOC_DAPM_CLOCK_SUPPLY("audioclk"),
@@ -406,6 +458,8 @@ static const struct snd_soc_dapm_widget ab8500_dapm_widgets[] = {
 	SND_SOC_DAPM_AIF_IN("DA_IN4", NULL, 0, SND_SOC_NOPM, 0, 0),
 	SND_SOC_DAPM_AIF_IN("DA_IN5", NULL, 0, SND_SOC_NOPM, 0, 0),
 	SND_SOC_DAPM_AIF_IN("DA_IN6", NULL, 0, SND_SOC_NOPM, 0, 0),
+	SND_SOC_DAPM_AIF_IN("DA_IN7", NULL, 0, SND_SOC_NOPM, 0, 0),
+	SND_SOC_DAPM_AIF_IN("DA_IN8", NULL, 0, SND_SOC_NOPM, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("AD_OUT1", NULL, 0, SND_SOC_NOPM, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("AD_OUT2", NULL, 0, SND_SOC_NOPM, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("AD_OUT3", NULL, 0, SND_SOC_NOPM, 0, 0),
@@ -540,7 +594,6 @@ static const struct snd_soc_dapm_widget ab8500_dapm_widgets[] = {
 	/* Vibrator path */
 
 	SND_SOC_DAPM_INPUT("PWMGEN1"),
-	SND_SOC_DAPM_INPUT("PWMGEN2"),
 
 	SND_SOC_DAPM_MIXER("DA5 Channel Volume",
 			AB8500_DAPATHENA, AB8500_DAPATHENA_ENDA5, 0,
@@ -551,22 +604,13 @@ static const struct snd_soc_dapm_widget ab8500_dapm_widgets[] = {
 	SND_SOC_DAPM_MIXER("VIB1 DAC",
 			AB8500_DAPATHCONF, AB8500_DAPATHCONF_ENDACVIB1, 0,
 			NULL, 0),
-	SND_SOC_DAPM_MIXER("VIB2 DAC",
-			AB8500_DAPATHCONF, AB8500_DAPATHCONF_ENDACVIB2, 0,
-			NULL, 0),
 	SND_SOC_DAPM_MUX("Vibra 1 Controller",
 			SND_SOC_NOPM, 0, 0, dapm_pwm2vib1),
-	SND_SOC_DAPM_MUX("Vibra 2 Controller",
-			SND_SOC_NOPM, 0, 0, dapm_pwm2vib2),
 	SND_SOC_DAPM_MIXER("VIB1 Enable",
 			AB8500_ANACONF4, AB8500_ANACONF4_ENVIB1, 0,
 			NULL, 0),
-	SND_SOC_DAPM_MIXER("VIB2 Enable",
-			AB8500_ANACONF4, AB8500_ANACONF4_ENVIB2, 0,
-			NULL, 0),
 
 	SND_SOC_DAPM_OUTPUT("Vibra 1"),
-	SND_SOC_DAPM_OUTPUT("Vibra 2"),
 
 	/* Mic 1 */
 
@@ -746,10 +790,124 @@ static const struct snd_soc_dapm_widget ab8500_dapm_widgets[] = {
 			NULL, 0),
 };
 
+static const struct snd_soc_dapm_widget ab8500_dapm_widgets[] = {
+
+	/* Vibrator 2 path */
+
+	SND_SOC_DAPM_INPUT("PWMGEN2"),
+
+	SND_SOC_DAPM_MIXER("VIB2 DAC",
+			AB8500_DAPATHCONF, AB8500_DAPATHCONF_ENDACVIB2, 0,
+			NULL, 0),
+	SND_SOC_DAPM_MUX("Vibra 2 Controller",
+			SND_SOC_NOPM, 0, 0, dapm_pwm2vib2),
+	SND_SOC_DAPM_MIXER("VIB2 Enable",
+			AB8500_ANACONF4, AB8500_ANACONF4_ENVIB2, 0,
+			NULL, 0),
+
+	SND_SOC_DAPM_OUTPUT("Vibra 2"),
+};
+
+static const struct snd_soc_dapm_widget ab8505_vx_dapm_widgets[] = {
+
+	/* USHLR & CKL path */
+
+	SND_SOC_DAPM_MIXER("USBHSL Mute", AB8505_USBDRVCTRL,
+			AB8505_USBDRVCTRL_MUTEUHSL, 1, NULL, 0),
+	SND_SOC_DAPM_MIXER("USBHSR Mute", AB8505_USBDRVCTRL,
+			AB8505_USBDRVCTRL_MUTEUHSR, 1, NULL, 0),
+
+	SND_SOC_DAPM_MIXER("USBHSL Enable", AB8505_USBDRVCTRL,
+			AB8505_USBDRVCTRL_ENUHSL, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("USBHSR Enable", AB8505_USBDRVCTRL,
+			AB8505_USBDRVCTRL_ENUHSR, 0, NULL, 0),
+
+	SND_SOC_DAPM_MIXER("Carkit Left to DM", AB8505_USBDRVCTRL,
+			AB8505_USBDRVCTRL_ENCKLOLDM, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("Carkit Right to DP", AB8505_USBDRVCTRL,
+			AB8505_USBDRVCTRL_ENCKLORDP, 0, NULL, 0),
+
+	SND_SOC_DAPM_MIXER("CKL Enable", AB8505_USBDRVCTRL,
+			AB8505_USBDRVCTRL_ENCKLOL, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("CKR Enable", AB8505_USBDRVCTRL,
+			AB8505_USBDRVCTRL_ENCKLOR, 0, NULL, 0),
+
+	SND_SOC_DAPM_PGA("USBHSL Volume", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("USBHSR Volume", SND_SOC_NOPM, 0, 0, NULL, 0),
+
+	SND_SOC_DAPM_OUTPUT("USBHSL"),
+	SND_SOC_DAPM_OUTPUT("USBHSR"),
+
+	SND_SOC_DAPM_OUTPUT("CKL"),
+	SND_SOC_DAPM_OUTPUT("CKR"),
+
+	/* Handsfree path */
+
+	SND_SOC_DAPM_MUX("Speaker Right Select",
+			SND_SOC_NOPM, 0, 0, dapm_da_hfr_select),
+
+	/* USB Mic path */
+
+	SND_SOC_DAPM_MUX("USB Mic Select",
+			SND_SOC_NOPM, 0, 0, dapm_usbmic_select),
+
+	/* PDM1 & PDM2 path */
+
+	SND_SOC_DAPM_MIXER("PDM1 Enable", AB8505_PDMCTRL, AB8505_PDMCTRL_ENPDM1,
+			0, NULL, 0),
+	SND_SOC_DAPM_MIXER("PDM2 Enable", AB8505_PDMCTRL, AB8505_PDMCTRL_ENPDM2,
+			0, NULL, 0),
+
+	SND_SOC_DAPM_OUTPUT("PDM"),
+
+	/* EPWM1 & EPWM2 path */
+
+	SND_SOC_DAPM_MIXER("EPWM1 Enable", AB8505_EPWM1CONF, AB8505_EPWM1CONF_EN,
+			0, NULL, 0),
+	SND_SOC_DAPM_MIXER("EPWM2 Enable", AB8505_EPWM2CONF, AB8505_EPWM2CONF_EN,
+			0, NULL, 0),
+
+	SND_SOC_DAPM_OUTPUT("EPWM1"),
+	SND_SOC_DAPM_OUTPUT("EPWM2"),
+};
+
+static const struct snd_soc_dapm_widget ab8505_v1_dapm_widgets[] = {
+
+	/* Handsfree path */
+
+	SND_SOC_DAPM_MUX("Speaker Left Select",
+			SND_SOC_NOPM, 0, 0, dapm_da_hfl_select_v1),
+};
+
+static const struct snd_soc_dapm_widget ab8505_v2_dapm_widgets[] = {
+
+	/* Handsfree path */
+
+	SND_SOC_DAPM_MUX("Speaker Left Select",
+			SND_SOC_NOPM, 0, 0, dapm_da_hfl_select_v2),
+
+	/* DA7 & DA8 path */
+	SND_SOC_DAPM_MIXER("DA7DA1 Enable", AB8505_MIXCTRL,
+			AB8505_MIXCTRL_DA7ADDDA1, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("DA7DA3 Enable", AB8505_MIXCTRL,
+			AB8505_MIXCTRL_DA7ADDDA3, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("DA8DA2 Enable", AB8505_MIXCTRL,
+			AB8505_MIXCTRL_DA8ADDDA2, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("DA8DA4 Enable", AB8505_MIXCTRL,
+			AB8505_MIXCTRL_DA8ADDDA4, 0, NULL, 0),
+
+	/* Handsfree path */
+
+	SND_SOC_DAPM_MUX("Speaker Left Select 2",
+			SND_SOC_NOPM, 0, 0, dapm_hfl2_select),
+	SND_SOC_DAPM_MUX("Speaker Right Select 2",
+			SND_SOC_NOPM, 0, 0, dapm_hfr2_select),
+};
+
 /*
  * DAPM-routes
  */
-static const struct snd_soc_dapm_route ab8500_dapm_routes[] = {
+static const struct snd_soc_dapm_route ab850x_dapm_routes[] = {
 	/* Power AB8500 audio-block when AD/DA is active */
 	{"Main Supply", NULL, "V-AUD"},
 	{"Main Supply", NULL, "audioclk"},
@@ -820,12 +978,6 @@ static const struct snd_soc_dapm_route ab8500_dapm_routes[] = {
 
 	/* HF path */
 
-	{"HFL DAC", NULL, "DA3 or ANC path to HfL"},
-	{"HFR DAC", NULL, "DA4 or ANC path to HfR"},
-
-	{"HFL Enable", NULL, "HFL DAC"},
-	{"HFR Enable", NULL, "HFR DAC"},
-
 	{"Speaker Left", NULL, "HFL Enable"},
 	{"Speaker Right", NULL, "HFR Enable"},
 
@@ -872,19 +1024,11 @@ static const struct snd_soc_dapm_route ab8500_dapm_routes[] = {
 	{"DA6 Channel Volume", NULL, "DA_IN6"},
 
 	{"VIB1 DAC", NULL, "DA5 Channel Volume"},
-	{"VIB2 DAC", NULL, "DA6 Channel Volume"},
-
 	{"Vibra 1 Controller", "Audio Path", "VIB1 DAC"},
-	{"Vibra 2 Controller", "Audio Path", "VIB2 DAC"},
 	{"Vibra 1 Controller", "PWM Generator", "PWMGEN1"},
-	{"Vibra 2 Controller", "PWM Generator", "PWMGEN2"},
 
 	{"VIB1 Enable", NULL, "Vibra 1 Controller"},
-	{"VIB2 Enable", NULL, "Vibra 2 Controller"},
-
 	{"Vibra 1", NULL, "VIB1 Enable"},
-	{"Vibra 2", NULL, "VIB2 Enable"},
-
 
 	/* Mic 2 */
 
@@ -1016,6 +1160,123 @@ static const struct snd_soc_dapm_route ab8500_dapm_routes[] = {
 
 	{"DA1 Enable", NULL, "STFIR1 Volume"},
 	{"DA2 Enable", NULL, "STFIR2 Volume"},
+};
+
+static const struct snd_soc_dapm_route ab8500_dapm_routes[] = {
+
+	/* HF path */
+
+	{"HFL Enable", NULL, "HFL DAC"},
+	{"HFR Enable", NULL, "HFR DAC"},
+
+	{"HFL DAC", NULL, "DA3 or ANC path to HfL"},
+	{"HFR DAC", NULL, "DA4 or ANC path to HfR"},
+
+	/* Vibrator path */
+
+	{"VIB2 DAC", NULL, "DA6 Channel Volume"},
+	{"Vibra 2 Controller", "Audio Path", "VIB2 DAC"},
+	{"Vibra 2 Controller", "PWM Generator", "PWMGEN2"},
+
+	{"VIB2 Enable", NULL, "Vibra 2 Controller"},
+	{"Vibra 2", NULL, "VIB2 Enable"},
+};
+
+
+static const struct snd_soc_dapm_route ab8505_vx_dapm_routes[] = {
+
+	/* Headset & USHLR & CK path */
+
+	{"USBHSL Mute", NULL, "Charge Pump"},
+	{"USBHSR Mute", NULL, "Charge Pump"},
+
+	{"USBHSL Mute", NULL, "HSL DAC Driver"},
+	{"USBHSR Mute", NULL, "HSR DAC Driver"},
+	{"CKL Enable", NULL, "HSL DAC Driver"},
+	{"CKR Enable", NULL, "HSR DAC Driver"},
+
+	{"Carkit Left to DM", NULL, "CKL Enable"},
+	{"Carkit Right to DP", NULL, "CKR Enable"},
+
+	{"USBHSL Enable", NULL, "USBHSL Mute"},
+	{"USBHSR Enable", NULL, "USBHSR Mute"},
+
+	{"USBHSL Volume", NULL, "USBHSL Enable"},
+	{"USBHSR Volume", NULL, "USBHSR Enable"},
+
+	{"USBHSL", NULL, "USBHSL Volume"},
+	{"USBHSR", NULL, "USBHSR Volume"},
+	{"CKL", NULL, "Carkit Left to DM"},
+	{"CKR", NULL, "Carkit Right to DP"},
+
+	/* USB Mic path */
+
+	/* HF path */
+
+	{"Speaker Left Select", "DA3", "DA3 or ANC path to HfL"},
+	{"Speaker Right Select", "DA4", "DA4 or ANC path to HfR"},
+	{"Speaker Right Select", "DA1", "DA1 Enable"},
+
+	{"HFL DAC", NULL, "Speaker Left Select"},
+	{"HFR DAC", NULL, "Speaker Right Select"},
+
+	/* PDM1 & PDM2 path */
+
+	{"PDM1 Enable", NULL, "Speaker Left"},
+	{"PDM2 Enable", NULL, "Speaker Right"},
+
+	{"PDM", NULL, "PDM1 Enable"},
+	{"PDM", NULL, "PDM2 Enable"},
+
+	/* EPWM1 & EPWM2 path */
+
+	{"EPWM2 Enable", NULL, "DA4 Channel Volume"},
+	{"EPWM1 Enable", NULL, "DA6 Channel Volume"},
+
+	{"EPWM2", NULL, "EPWM2 Enable"},
+	{"EPWM1", NULL, "EPWM1 Enable"},
+};
+
+static const struct snd_soc_dapm_route ab8505_v1_dapm_routes[] = {
+
+	/* HF path */
+
+	{"Speaker Left Select", "DA5", "DA5 Channel Volume"},
+
+	{"HFL Enable", NULL, "HFL DAC"},
+	{"HFR Enable", NULL, "HFR DAC"},
+};
+
+static const struct snd_soc_dapm_route ab8505_v2_dapm_routes[] = {
+
+	/* DA7 & DA8 path */
+
+	{"DA7DA1 Enable", NULL, "DA_IN7"},
+	{"DA1 Enable", NULL, "DA7DA1 Enable"},
+
+	{"DA7DA3 Enable", NULL, "DA_IN7"},
+	{"DA3 Channel Volume", NULL, "DA7DA3 Enable"},
+
+	{"DA8DA2 Enable", NULL, "DA_IN8"},
+	{"DA2 Enable", NULL, "DA8DA2 Enable"},
+
+	{"DA8DA4 Enable", NULL, "DA_IN8"},
+	{"DA4 Channel Volume", NULL, "DA8DA4 Enable"},
+
+	/* HF path */
+
+	{"Speaker Left Select", "DA6", "DA6 Channel Volume"},
+
+	{"Speaker Left Select 2", "Speaker Left", "HFL DAC"},
+	{"Speaker Right Select 2", "Speaker Right", "HFR DAC"},
+
+	{"HFL Enable", NULL, "Speaker Left Select 2"},
+	{"HFR Enable", NULL, "Speaker Right Select 2"},
+
+	/* EPWM1 & EPWM2 path */
+
+	{"Speaker Left Select 2", "EPWM 2", "EPWM2 Enable"},
+	{"Speaker Right Select 2", "EPWM 1", "EPWM1 Enable"},
 };
 
 static const struct snd_soc_dapm_route ab8500_dapm_routes_mic1a_vamicx[] = {
@@ -1332,10 +1593,43 @@ static DECLARE_TLV_DB_SCALE(dax_dig_gain_tlv, -6300, 100, 1);
 static DECLARE_TLV_DB_SCALE(hs_ear_dig_gain_tlv, -100, 100, 1);
 /* -1dB = Mute */
 
-static const DECLARE_TLV_DB_RANGE(hs_gain_tlv,
+/* from -32 to -20 dB in 4 dB steps / from -18 to 2 dB in 2 dB steps */
+static const DECLARE_TLV_DB_RANGE(ab8500_hs_gain_tlv,
 	0, 3, TLV_DB_SCALE_ITEM(-3200, 400, 0),
 	4, 15, TLV_DB_SCALE_ITEM(-1800, 200, 0)
 );
+
+/* -31.8, -28.2, -32 to -20 dB in 4 dB steps / -18 to 2 dB in 2 dB steps */
+static const DECLARE_TLV_DB_RANGE(ab8505_hs_gain_tlv,
+	0, 0, TLV_DB_SCALE_ITEM(-3180, 0, 0),
+	1, 1, TLV_DB_SCALE_ITEM(-2820, 0, 0),
+	2, 3, TLV_DB_SCALE_ITEM(-2400, 400, 0),
+	4, 15, TLV_DB_SCALE_ITEM(-1800, 200, 0)
+);
+
+/* -31.8, -28.2, -24 to -20 dB in 4 dB steps / -18 to 2 dB in 2 dB steps */
+static const DECLARE_TLV_DB_RANGE(uhs_gain_tlv,
+	0, 0, TLV_DB_SCALE_ITEM(-3180, 0, 0),
+	1, 1, TLV_DB_SCALE_ITEM(-2820, 0, 0),
+	2, 3, TLV_DB_SCALE_ITEM(-2400, 400, 0),
+	4, 15, TLV_DB_SCALE_ITEM(-1800, 200, 0),
+);
+
+
+/* from -3 to 12 dB in 1 dB steps (ab8505 v1) */
+static DECLARE_TLV_DB_SCALE(hf_dig_gain_v1_tlv, -300, 100, 0);
+
+/* from -3 to 20 dB in 1 dB steps (ab8505 v2) (mute instead of -4 dB) */
+static DECLARE_TLV_DB_SCALE(hf_dig_gain_v2_tlv, -400, 100, 1);
+
+/* from -3 to 12 dB in 1 dB steps (ab8505 v1) */
+static DECLARE_TLV_DB_SCALE(vib_dig_gain_v1_tlv, -300, 100, 0);
+
+/* from -3 to 20 dB in 1 dB steps (ab8505 v2) (mute instead of -4 dB) */
+static DECLARE_TLV_DB_SCALE(vib_dig_gain_v2_tlv, -400, 100, 1);
+
+/* from -8 to 8 dB in 2 dB steps */
+static DECLARE_TLV_DB_SCALE(ear_gain_tlv, -800, 200, 0);
 
 static DECLARE_TLV_DB_SCALE(mic_gain_tlv, 0, 100, 0);
 
@@ -1415,6 +1709,14 @@ static SOC_ENUM_DOUBLE_DECL(soc_enum_dmic34sinc, AB8500_DMICFILTCONF,
 static SOC_ENUM_DOUBLE_DECL(soc_enum_dmic56sinc, AB8500_DMICFILTCONF,
 			AB8500_DMICFILTCONF_DMIC5SINC3,
 			AB8500_DMICFILTCONF_DMIC6SINC3, enum_sinc53);
+
+static const char * const enum_dmicfreq[] = {"2.4MHz", "3.84MHz", "4.8MHz"};
+static SOC_ENUM_SINGLE_DECL(soc_enum_dmic12freq,
+		AB8505_DMICFREQ, AB8505_DMICFREQ_MIC12FREQ, enum_dmicfreq);
+static SOC_ENUM_SINGLE_DECL(soc_enum_dmic34freq,
+		AB8505_DMICFREQ, AB8505_DMICFREQ_MIC34FREQ, enum_dmicfreq);
+static SOC_ENUM_SINGLE_DECL(soc_enum_dmic56freq,
+		AB8505_DMICFREQ, AB8505_DMICFREQ_MIC56FREQ, enum_dmicfreq);
 
 /* Digital interface - DA from slot mapping */
 static const char * const enum_da_from_slot_map[] = {"SLOT0",
@@ -1608,7 +1910,56 @@ static SOC_ENUM_SINGLE_EXT_DECL(soc_enum_sidstate, enum_sid_state);
 /* ANC */
 static SOC_ENUM_SINGLE_EXT_DECL(soc_enum_ancstate, enum_anc_state);
 
-static struct snd_kcontrol_new ab8500_ctrls[] = {
+/* EPWM (AB8505 only) */
+static const char * const enum_epwmfreq[] = {
+	"20kHz", "24kHz", "30kHz", "48kHz",
+	"60kHz", "64kHz", "80kHz", "100kHz",
+	"120kHz", "150kHz", "192kHz", "256kHz",
+	"480kHz", "600kHz", "768kHz", "960kHz" };
+static SOC_ENUM_SINGLE_DECL(soc_enum_epwm1freq,
+		AB8505_EPWM1CONF, AB8505_EPWM1CONF_FREQ, enum_epwmfreq);
+static SOC_ENUM_SINGLE_DECL(soc_enum_epwm2freq,
+		AB8505_EPWM2CONF, AB8505_EPWM2CONF_FREQ, enum_epwmfreq);
+
+static const char * const enum_epwmedge[] = {"Sawtooth", "Triangular"};
+static SOC_ENUM_SINGLE_DECL(soc_enum_epwm1edge,
+		AB8505_EPWM1CONF, AB8505_EPWM1CONF_EDGE, enum_epwmedge);
+static SOC_ENUM_SINGLE_DECL(soc_enum_epwm2edge,
+		AB8505_EPWM2CONF, AB8505_EPWM2CONF_EDGE, enum_epwmedge);
+
+static const char * const enum_epwm2gpiosel[] = {"PdmClk", "PWM2"};
+static SOC_ENUM_SINGLE_DECL(soc_enum_epwm2gpiosel,
+		AB8505_EPWM2CONF, AB8505_EPWM2CONF_GPIOSEL, enum_epwm2gpiosel);
+
+static const char * const enum_epwmsprwin[] = {
+	"376kHz", "376kHz to 400kHz", "376kHz to 427kHz",
+	"376kHz to 457kHz", "376kHz to 492kHz", "376kHz to 533kHz"};
+static SOC_ENUM_SINGLE_DECL(soc_enum_epwmsprwin, AB8505_CIDEMICTRL,
+		AB8505_CIDEMICTRL_MAX, enum_epwmsprwin);
+
+static const char * const enum_lineincfg[] = {"Differential", "Single Ended"};
+static SOC_ENUM_SINGLE_DECL(soc_enum_lineincfg,
+		AB8500_ADPATHENA, AB8505_ADPATHENA_SELIN, enum_lineincfg);
+
+static const char * const enum_dacmode[] = {
+		"Normal", "Low High Freq Noise Mode"
+};
+static SOC_ENUM_SINGLE_DECL(soc_enum_dacmode,
+		AB8505_CIDEMICTRL, AB8505_CIDEMICTRL_DALOWHFNOI, enum_dacmode);
+
+static const char * const enum_pwmacmode[] = {"DC", "AC"};
+static SOC_ENUM_SINGLE_DECL(soc_enum_pwmacmode,
+		AB8505_CIDEMICTRL, AB8505_CIDEMICTRL_PWMACMODE, enum_pwmacmode);
+
+static const char * const enum_ad12lb[] = {"Stereo", "Mono"};
+static SOC_ENUM_SINGLE_DECL(soc_enum_ad12lb,
+		AB8505_DMICFREQ, AB8505_DMICFREQ_AD12LBMONO, enum_ad12lb);
+
+static const char * const enum_ad78[] = {"Stereo", "Mono"};
+static SOC_ENUM_SINGLE_DECL(soc_enum_ad78,
+		AB8505_MIXCTRL, AB8505_MIXCTRL_DA78MONO, enum_ad78);
+
+static struct snd_kcontrol_new ab850x_ctrls[] = {
 	/* Charge pump */
 	SOC_ENUM("Charge Pump High Threshold For Low Voltage",
 		soc_enum_envdeththre),
@@ -1643,33 +1994,20 @@ static struct snd_kcontrol_new ab8500_ctrls[] = {
 	SOC_DOUBLE_R_TLV("Headset Digital Volume",
 		AB8500_HSLEARDIGGAIN, AB8500_HSRDIGGAIN,
 		0, AB8500_HSLEARDIGGAIN_HSLDGAIN_MAX, 1, hs_ear_dig_gain_tlv),
-	SOC_DOUBLE_TLV("Headset Volume",
-		AB8500_ANAGAIN3,
-		AB8500_ANAGAIN3_HSLGAIN, AB8500_ANAGAIN3_HSRGAIN,
-		AB8500_ANAGAIN3_HSXGAIN_MAX, 1, hs_gain_tlv),
 
 	/* Earpiece */
 	SOC_ENUM("Earpiece DAC Mode",
 		soc_enum_eardaclowpow),
 	SOC_ENUM("Earpiece DAC Drv Mode",
 		soc_enum_eardrvlowpow),
+	SOC_SINGLE("Earpiece High Pass Switch",
+		AB8500_DAPATHENA, AB8500_DAPATHENA_ENHPEAR,
+		1, 0),
 
 	/* HandsFree */
 	SOC_ENUM("HF Mode", soc_enum_da34voice),
 	SOC_SINGLE("HF and Headset Swap Switch",
 		AB8500_DASLOTCONF1, AB8500_DASLOTCONF1_SWAPDA12_34,
-		1, 0),
-	SOC_DOUBLE("HF Low EMI Mode Switch",
-		AB8500_CLASSDCONF1,
-		AB8500_CLASSDCONF1_HFLSWAPEN, AB8500_CLASSDCONF1_HFRSWAPEN,
-		1, 0),
-	SOC_DOUBLE("HF FIR Bypass Switch",
-		AB8500_CLASSDCONF2,
-		AB8500_CLASSDCONF2_FIRBYP0, AB8500_CLASSDCONF2_FIRBYP1,
-		1, 0),
-	SOC_DOUBLE("HF High Volume Switch",
-		AB8500_CLASSDCONF2,
-		AB8500_CLASSDCONF2_HIGHVOLEN0, AB8500_CLASSDCONF2_HIGHVOLEN1,
 		1, 0),
 	SOC_SINGLE("HF L and R Bridge Switch",
 		AB8500_CLASSDCONF1, AB8500_CLASSDCONF1_PARLHF,
@@ -1679,41 +2017,10 @@ static struct snd_kcontrol_new ab8500_ctrls[] = {
 		0, AB8500_DADIGGAINX_DAXGAIN_MAX, 1, dax_dig_gain_tlv),
 
 	/* Vibra */
-	SOC_DOUBLE("Vibra High Volume Switch",
-		AB8500_CLASSDCONF2,
-		AB8500_CLASSDCONF2_HIGHVOLEN2, AB8500_CLASSDCONF2_HIGHVOLEN3,
-		1, 0),
-	SOC_DOUBLE("Vibra Low EMI Mode Switch",
-		AB8500_CLASSDCONF1,
-		AB8500_CLASSDCONF1_VIB1SWAPEN, AB8500_CLASSDCONF1_VIB2SWAPEN,
-		1, 0),
-	SOC_DOUBLE("Vibra FIR Bypass Switch",
-		AB8500_CLASSDCONF2,
-		AB8500_CLASSDCONF2_FIRBYP2, AB8500_CLASSDCONF2_FIRBYP3,
-		1, 0),
 	SOC_ENUM("Vibra Mode", soc_enum_da56voice),
-	SOC_DOUBLE_R("Vibra PWM Duty Cycle N",
-		AB8500_PWMGENCONF3, AB8500_PWMGENCONF5,
-		AB8500_PWMGENCONFX_PWMVIBXDUTCYC,
-		AB8500_PWMGENCONFX_PWMVIBXDUTCYC_MAX, 0),
-	SOC_DOUBLE_R("Vibra PWM Duty Cycle P",
-		AB8500_PWMGENCONF2, AB8500_PWMGENCONF4,
-		AB8500_PWMGENCONFX_PWMVIBXDUTCYC,
-		AB8500_PWMGENCONFX_PWMVIBXDUTCYC_MAX, 0),
-	SOC_SINGLE("Vibra 1 and 2 Bridge Switch",
-		AB8500_CLASSDCONF1, AB8500_CLASSDCONF1_PARLVIB,
-		1, 0),
 	SOC_DOUBLE_R_TLV("Vibra Master Volume",
 		AB8500_DADIGGAIN5, AB8500_DADIGGAIN6,
 		0, AB8500_DADIGGAINX_DAXGAIN_MAX, 1, dax_dig_gain_tlv),
-
-	/* HandsFree, Vibra */
-	SOC_SINGLE("ClassD High Pass Volume",
-		AB8500_CLASSDCONF3, AB8500_CLASSDCONF3_DITHHPGAIN,
-		AB8500_CLASSDCONF3_DITHHPGAIN_MAX, 0),
-	SOC_SINGLE("ClassD White Volume",
-		AB8500_CLASSDCONF3, AB8500_CLASSDCONF3_DITHWGAIN,
-		AB8500_CLASSDCONF3_DITHWGAIN_MAX, 0),
 
 	/* Mic 1, Mic 2, LineIn */
 	SOC_DOUBLE_R_TLV("Mic Master Volume",
@@ -1902,6 +2209,150 @@ static struct snd_kcontrol_new ab8500_ctrls[] = {
 		sid_status_control_get, sid_status_control_put),
 	SOC_SINGLE_STROBE("Sidetone Reset",
 		AB8500_SIDFIRADR, AB8500_SIDFIRADR_FIRSIDSET, 0),
+};
+
+static struct snd_kcontrol_new ab8500_ctrls[] = {
+	/* Headset */
+	SOC_DOUBLE_TLV("Headset Volume",
+		AB8500_ANAGAIN3,
+		AB8500_ANAGAIN3_HSLGAIN, AB8500_ANAGAIN3_HSRGAIN,
+		AB8500_ANAGAIN3_HSXGAIN_MAX, 1, ab8500_hs_gain_tlv),
+
+	/* HandsFree */
+	SOC_DOUBLE("HF Low EMI Mode Switch",
+		AB8500_CLASSDCONF1,
+		AB8500_CLASSDCONF1_HFLSWAPEN, AB8500_CLASSDCONF1_HFRSWAPEN,
+		1, 0),
+	SOC_DOUBLE("HF FIR Bypass Switch",
+		AB8500_CLASSDCONF2,
+		AB8500_CLASSDCONF2_FIRBYP0, AB8500_CLASSDCONF2_FIRBYP1,
+		1, 0),
+	SOC_DOUBLE("HF High Volume Switch",
+		AB8500_CLASSDCONF2,
+		AB8500_CLASSDCONF2_HIGHVOLEN0, AB8500_CLASSDCONF2_HIGHVOLEN1,
+		1, 0),
+
+	/* Vibra */
+	SOC_SINGLE("Vibra 1 and 2 Bridge Switch",
+		AB8500_CLASSDCONF1, AB8500_CLASSDCONF1_PARLVIB,
+		1, 0),
+	SOC_DOUBLE("Vibra High Volume Switch",
+		AB8500_CLASSDCONF2,
+		AB8500_CLASSDCONF2_HIGHVOLEN2, AB8500_CLASSDCONF2_HIGHVOLEN3,
+		1, 0),
+	SOC_DOUBLE("Vibra Low EMI Mode Switch",
+		AB8500_CLASSDCONF1,
+		AB8500_CLASSDCONF1_VIB1SWAPEN, AB8500_CLASSDCONF1_VIB2SWAPEN,
+		1, 0),
+	SOC_DOUBLE("Vibra FIR Bypass Switch",
+		AB8500_CLASSDCONF2,
+		AB8500_CLASSDCONF2_FIRBYP2, AB8500_CLASSDCONF2_FIRBYP3,
+		1, 0),
+	SOC_DOUBLE_R("Vibra PWM Duty Cycle N",
+		AB8500_PWMGENCONF3, AB8500_PWMGENCONF5,
+		AB8500_PWMGENCONFX_PWMVIBXDUTCYC,
+		AB8500_PWMGENCONFX_PWMVIBXDUTCYC_MAX, 0),
+	SOC_DOUBLE_R("Vibra PWM Duty Cycle P",
+		AB8500_PWMGENCONF2, AB8500_PWMGENCONF4,
+		AB8500_PWMGENCONFX_PWMVIBXDUTCYC,
+		AB8500_PWMGENCONFX_PWMVIBXDUTCYC_MAX, 0),
+
+	/* HandsFree, Vibra */
+	SOC_SINGLE("ClassD High Pass Volume",
+		AB8500_CLASSDCONF3, AB8500_CLASSDCONF3_DITHHPGAIN,
+		AB8500_CLASSDCONF3_DITHHPGAIN_MAX, 0),
+	SOC_SINGLE("ClassD White Volume",
+		AB8500_CLASSDCONF3, AB8500_CLASSDCONF3_DITHWGAIN,
+		AB8500_CLASSDCONF3_DITHWGAIN_MAX, 0),
+};
+
+static struct snd_kcontrol_new ab8505_vx_ctrls[] = {
+
+	SOC_ENUM("EPWM 1 Modulation Type", soc_enum_epwm1edge),
+	SOC_ENUM("EPWM 2 Modulation Type", soc_enum_epwm2edge),
+	SOC_ENUM("EPWM 1 Frequency", soc_enum_epwm1freq),
+	SOC_ENUM("EPWM 2 Frequency", soc_enum_epwm2freq),
+	SOC_ENUM("EPWM 2 GPIO Signal Source", soc_enum_epwm2gpiosel),
+	SOC_ENUM("EPWM Spreading Frequency", soc_enum_epwmsprwin),
+
+	SOC_SINGLE("Vibra PWM Duty Cycle N",
+		AB8500_PWMGENCONF3, AB8500_PWMGENCONFX_PWMVIBXDUTCYC,
+		AB8500_PWMGENCONFX_PWMVIBXDUTCYC_MAX, 0),
+	SOC_SINGLE("Vibra PWM Duty Cycle P",
+		AB8500_PWMGENCONF2, AB8500_PWMGENCONFX_PWMVIBXDUTCYC,
+		AB8500_PWMGENCONFX_PWMVIBXDUTCYC_MAX, 0),
+
+	SOC_DOUBLE_TLV("USB Headset Volume",
+		AB8505_USBHSGAIN, AB8505_USBHSGAIN_UHSL,
+		AB8505_USBHSGAIN_UHSR, AB8505_USBHSGAIN_UHSX_MAX,
+		1, uhs_gain_tlv),
+
+	SOC_SINGLE_TLV("Earpiece Analog Volume",
+		AB8505_EARGAINMICSEL, AB8505_EARGAINMICSEL_GAIN,
+		AB8505_EARGAINMICSEL_GAIN_MAX, 1, ear_gain_tlv),
+
+	SOC_ENUM("DMic 1 and 2 Frequency", soc_enum_dmic12freq),
+	SOC_ENUM("DMic 3 and 4 Frequency", soc_enum_dmic34freq),
+	SOC_ENUM("DMic 5 and 6 Frequency", soc_enum_dmic56freq),
+
+	SOC_DOUBLE_TLV("Headset Volume",
+		AB8500_ANAGAIN3,
+		AB8500_ANAGAIN3_HSLGAIN, AB8500_ANAGAIN3_HSRGAIN,
+		AB8500_ANAGAIN3_HSXGAIN_MAX, 1, ab8505_hs_gain_tlv),
+};
+
+static struct snd_kcontrol_new ab8505_v1_ctrls[] = {
+
+	SOC_SINGLE_TLV("Vibra Digital Volume",
+		AB8505_VIBGAINCTRL_V1, AB8505_VIBGAINCTRL_V1_SHIFT,
+		AB8505_VIBGAINCTRL_V1_MAX, 1, vib_dig_gain_v1_tlv),
+
+	SOC_DOUBLE_TLV("HF Digital Volume", AB8505_HFGAINCTRL_V1,
+		AB8505_HFGAINCTRL_V1_HFL, AB8505_HFGAINCTRL_V1_HFR,
+		AB8505_HFGAINCTRL_V1_HFX_MAX, 1, hf_dig_gain_v1_tlv),
+};
+
+static struct snd_kcontrol_new ab8505_v2_ctrls[] = {
+
+	SOC_ENUM("LineIn Configuration", soc_enum_lineincfg),
+	SOC_SINGLE("ADC3 Low Power Switch",
+		AB8500_ADPATHENA, AB8505_ADPATHENA_LPADC3,
+		1, 0),
+	SOC_SINGLE("Internal PWM AC Frequence Value", AB8505_IPWMACFREQ,
+		AB8505_IPWMACFREQ_FREQ, AB8505_IPWMACFREQ_FREQ_MAX, 0),
+
+	SOC_ENUM("DAC Working Mode", soc_enum_dacmode),
+	SOC_ENUM("PWM Generator Mode", soc_enum_pwmacmode),
+
+	SOC_SINGLE("EPWM1 DC A MAXDC Multiplier", AB8505_EPWM1ACDCA,
+		AB8505_EPWM1ACDCA_ACDCA, AB8505_EPWM1ACDCA_ACDCA_MAX, 0),
+
+	SOC_SINGLE("EPWM1 DC B MAXDC Multiplier", AB8505_EPWM1ACDCB,
+		AB8505_EPWM1ACDCB_ACDCB, AB8505_EPWM1ACDCB_ACDCB_MAX, 0),
+
+	SOC_SINGLE("EPWM1 AC Gen Frequency", AB8505_EPWM1ACFREQ,
+		0, AB8505_EPWM1ACFREQ_FREQ_MAX, 0),
+
+	SOC_SINGLE("EPWM2 DC A MAXDC Multiplier", AB8505_EPWM2ACDCA,
+		AB8505_EPWM2ACDCA_ACDCA, AB8505_EPWM2ACDCA_ACDCA_MAX, 0),
+
+	SOC_SINGLE("EPWM2 DC B MAXDC Multiplier", AB8505_EPWM2ACDCB,
+		AB8505_EPWM2ACDCB_ACDCB, AB8505_EPWM2ACDCB_ACDCB_MAX, 0),
+
+	SOC_SINGLE("EPWM2 AC Gen Frequency", AB8505_EPWM2ACFREQ,
+		0, AB8505_EPWM2ACFREQ_FREQ_MAX, 0),
+
+	SOC_SINGLE_TLV("Vibra Digital Gain Playback Volume",
+		AB8505_VIBGAINCTRL_V2, AB8505_VIBGAINCTRL_V2_SHIFT,
+		AB8505_VIBGAINCTRL_V2_MAX, 1, vib_dig_gain_v2_tlv),
+
+	SOC_DOUBLE_R_TLV("IHF Digital Gain Playback Volume",
+		AB8505_HFLGAINCTRL_V2, AB8505_HFRGAINCTRL_V2,
+		AB8505_HFGAINCTRL_V2_SHIFT, AB8505_HFGAINCTRL_V2_MAX,
+		1, hf_dig_gain_v2_tlv),
+
+	SOC_ENUM("AD12 Loopback Mode", soc_enum_ad12lb),
+	SOC_ENUM("DA78 Output Mode", soc_enum_ad78),
 };
 
 static struct snd_kcontrol_new ab8500_filter_controls[] = {
@@ -2456,6 +2907,32 @@ static void ab8500_codec_of_probe(struct device *dev, struct device_node *np,
 	}
 }
 
+static int ab8500_init_controls(struct snd_soc_component *component,
+				const struct snd_soc_dapm_widget *dapm_widgets,
+				unsigned int num_dapm_widgets,
+				const struct snd_soc_dapm_route *dapm_routes,
+				unsigned int num_dapm_routes,
+				const struct snd_kcontrol_new *controls,
+				unsigned int num_controls)
+{
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(component);
+	int ret;
+
+	ret = snd_soc_dapm_new_controls(dapm, dapm_widgets, num_dapm_widgets);
+	if (ret < 0)
+		return ret;
+
+	ret = snd_soc_dapm_add_routes(dapm, dapm_routes, num_dapm_routes);
+	if (ret < 0)
+		return ret;
+
+	ret = snd_soc_add_component_controls(component, controls, num_controls);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
 static int ab8500_codec_probe(struct snd_soc_component *component)
 {
 	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(component);
@@ -2469,6 +2946,56 @@ static int ab8500_codec_probe(struct snd_soc_component *component)
 	dev_dbg(dev, "%s: Enter.\n", __func__);
 
 	ab8500_codec_of_probe(dev, np, &codec_pdata);
+
+	/* Add version specific controls and DAPM routes */
+	if (is_ab8500(drvdata->ab8500)) {
+		status = ab8500_init_controls(component,
+				ab8500_dapm_widgets, ARRAY_SIZE(ab8500_dapm_widgets),
+				ab8500_dapm_routes, ARRAY_SIZE(ab8500_dapm_routes),
+				ab8500_ctrls, ARRAY_SIZE(ab8500_ctrls));
+		if (status < 0)
+			return status;
+	} else if (is_ab8505(drvdata->ab8500)) {
+		/*
+		 * Need to register DAPM widgets early in case one of the
+		 * version-specific routes reference one of these.
+		 */
+		status = snd_soc_dapm_new_controls(dapm, ab8505_vx_dapm_widgets,
+						   ARRAY_SIZE(ab8505_vx_dapm_widgets));
+		if (status < 0)
+			return status;
+
+		if (is_ab8505_1p0_or_earlier(drvdata->ab8500)) {
+			dev_err(dev, "ab8505v1\n");
+			status = ab8500_init_controls(component,
+					ab8505_v1_dapm_widgets, ARRAY_SIZE(ab8505_v1_dapm_widgets),
+					ab8505_v1_dapm_routes, ARRAY_SIZE(ab8505_v1_dapm_routes),
+					ab8505_v1_ctrls, ARRAY_SIZE(ab8505_v1_ctrls));
+			if (status < 0)
+				return status;
+		} else {
+			dev_err(dev, "ab8505v2\n");
+			status = ab8500_init_controls(component,
+					ab8505_v2_dapm_widgets, ARRAY_SIZE(ab8505_v2_dapm_widgets),
+					ab8505_v2_dapm_routes, ARRAY_SIZE(ab8505_v2_dapm_routes),
+					ab8505_v2_ctrls, ARRAY_SIZE(ab8505_v2_ctrls));
+			if (status < 0)
+				return status;
+		}
+
+		status = snd_soc_dapm_add_routes(dapm, ab8505_vx_dapm_routes,
+						 ARRAY_SIZE(ab8505_vx_dapm_routes));
+		if (status < 0)
+			return status;
+
+		status = snd_soc_add_component_controls(component, ab8505_vx_ctrls,
+							ARRAY_SIZE(ab8505_vx_ctrls));
+		if (status < 0)
+			return status;
+	} else {
+		dev_err(dev, "unsupported ab8500 version\n");
+		return -ENOTSUPP;
+	}
 
 	status = ab8500_audio_setup_mics(component, &codec_pdata.amics);
 	if (status < 0) {
@@ -2523,12 +3050,12 @@ static int ab8500_codec_probe(struct snd_soc_component *component)
 
 static const struct snd_soc_component_driver ab8500_component_driver = {
 	.probe			= ab8500_codec_probe,
-	.controls		= ab8500_ctrls,
-	.num_controls		= ARRAY_SIZE(ab8500_ctrls),
-	.dapm_widgets		= ab8500_dapm_widgets,
-	.num_dapm_widgets	= ARRAY_SIZE(ab8500_dapm_widgets),
-	.dapm_routes		= ab8500_dapm_routes,
-	.num_dapm_routes	= ARRAY_SIZE(ab8500_dapm_routes),
+	.controls		= ab850x_ctrls,
+	.num_controls		= ARRAY_SIZE(ab850x_ctrls),
+	.dapm_widgets		= ab850x_dapm_widgets,
+	.num_dapm_widgets	= ARRAY_SIZE(ab850x_dapm_widgets),
+	.dapm_routes		= ab850x_dapm_routes,
+	.num_dapm_routes	= ARRAY_SIZE(ab850x_dapm_routes),
 	.idle_bias_on		= 1,
 	.use_pmdown_time	= 1,
 	.endianness		= 1,
@@ -2547,6 +3074,7 @@ static int ab8500_codec_driver_probe(struct platform_device *pdev)
 			GFP_KERNEL);
 	if (!drvdata)
 		return -ENOMEM;
+	drvdata->ab8500 = dev_get_drvdata(pdev->dev.parent);
 	drvdata->sid_status = SID_UNCONFIGURED;
 	drvdata->anc_status = ANC_UNCONFIGURED;
 	dev_set_drvdata(&pdev->dev, drvdata);
