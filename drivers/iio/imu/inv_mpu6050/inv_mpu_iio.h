@@ -8,6 +8,7 @@
 #include <linux/iio/iio.h>
 #include <linux/iio/buffer.h>
 #include <linux/regmap.h>
+#include <linux/regulator/consumer.h>
 #include <linux/iio/sysfs.h>
 #include <linux/iio/kfifo_buf.h>
 #include <linux/iio/trigger.h>
@@ -124,7 +125,7 @@ struct inv_mpu6050_hw {
  *  @chip_period:	chip internal period estimation (~1kHz).
  *  @it_timestamp:	timestamp from previous interrupt.
  *  @data_timestamp:	timestamp for next data sample.
- *  @vddio_supply	voltage regulator for the chip.
+ *  @supplies:		voltage regulators for the chip.
  */
 struct inv_mpu6050_state {
 	struct mutex lock;
@@ -145,7 +146,7 @@ struct inv_mpu6050_state {
 	s64 chip_period;
 	s64 it_timestamp;
 	s64 data_timestamp;
-	struct regulator *vddio_supply;
+	struct regulator_bulk_data supplies[2];
 };
 
 /*register and associated bit definition*/

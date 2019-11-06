@@ -1029,11 +1029,8 @@ static int inv_mpu_core_enable_regulator(struct inv_mpu6050_state *st)
 {
 	int result;
 
-	result = regulator_enable(st->vddio_supply);
-	if (result) {
-		dev_err(regmap_get_device(st->map),
-			"Failed to enable regulator: %d\n", result);
-	} else {
+	result = regulator_bulk_enable(ARRAY_SIZE(st->supplies), st->supplies);
+	if (result == 0) {
 		/* Give the device a little bit of time to start up. */
 		usleep_range(35000, 70000);
 	}
@@ -1043,14 +1040,7 @@ static int inv_mpu_core_enable_regulator(struct inv_mpu6050_state *st)
 
 static int inv_mpu_core_disable_regulator(struct inv_mpu6050_state *st)
 {
-	int result;
-
-	result = regulator_disable(st->vddio_supply);
-	if (result)
-		dev_err(regmap_get_device(st->map),
-			"Failed to disable regulator: %d\n", result);
-
-	return result;
+	return regulator_bulk_disable(ARRAY_SIZE(st->supplies), st->supplies);
 }
 
 static void inv_mpu_core_disable_regulator_action(void *_data)
@@ -1124,14 +1114,12 @@ int inv_mpu_core_probe(struct regmap *regmap, int irq, const char *name,
 		return -EINVAL;
 	}
 
-	st->vddio_supply = devm_regulator_get(dev, "vddio");
-	if (IS_ERR(st->vddio_supply)) {
-		if (PTR_ERR(st->vddio_supply) != -EPROBE_DEFER)
-			dev_err(dev, "Failed to get vddio regulator %d\n",
-				(int)PTR_ERR(st->vddio_supply));
-
-		return PTR_ERR(st->vddio_supply);
-	}
+	st->supplies[0].supply = "vdd";
+	st->supplies[1].supply = "vddio";
+	result = devm_regulator_bulk_get(dev, ARRAY_SIZE(st->supplies),
+					 st->supplies);
+	if (result)
+		return result;
 
 	result = inv_mpu_core_enable_regulator(st);
 	if (result)
