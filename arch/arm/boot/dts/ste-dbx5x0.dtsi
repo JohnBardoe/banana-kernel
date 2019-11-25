@@ -14,6 +14,13 @@
 	#address-cells = <1>;
 	#size-cells = <1>;
 
+	/* This stablilizes the serial port enumeration */
+	aliases {
+		serial0 = &ux500_serial0;
+		serial1 = &ux500_serial1;
+		serial2 = &ux500_serial2;
+	};
+
 	chosen {
 	};
 
