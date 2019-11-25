@@ -143,6 +143,8 @@
 		};
 
 		i2c@80128000 {
+			status = "okay";
+
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&i2c2_b_2_default>;
 			pinctrl-1 = <&i2c2_b_2_sleep>;
@@ -168,6 +170,8 @@
 		};
 
 		i2c@80110000 {
+			status = "okay";
+
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&i2c3_c_2_default>;
 			pinctrl-1 = <&i2c3_c_2_sleep>;
