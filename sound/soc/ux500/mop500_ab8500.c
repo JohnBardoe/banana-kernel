@@ -9,6 +9,8 @@
  * License terms:
  */
 
+#define DEBUG
+
 #include <linux/module.h>
 #include <linux/device.h>
 #include <linux/io.h>
@@ -25,8 +27,8 @@
 #include "mop500_ab8500.h"
 #include "../codecs/ab8500-codec.h"
 
-#define TX_SLOT_MONO	0x0008
-#define TX_SLOT_STEREO	0x000a
+#define TX_SLOT_MONO	0x0001
+#define TX_SLOT_STEREO	0x0003
 #define RX_SLOT_MONO	0x0001
 #define RX_SLOT_STEREO	0x0003
 #define TX_SLOT_8CH	0x00FF
@@ -173,7 +175,7 @@ static struct snd_kcontrol_new mop500_ab8500_ctrls[] = {
 	SOC_DAPM_PIN_SWITCH("LineOut Left"),
 	SOC_DAPM_PIN_SWITCH("LineOut Right"),
 	SOC_DAPM_PIN_SWITCH("Vibra 1"),
-	SOC_DAPM_PIN_SWITCH("Vibra 2"),
+	//SOC_DAPM_PIN_SWITCH("Vibra 2"),
 	SOC_DAPM_PIN_SWITCH("Mic 1"),
 	SOC_DAPM_PIN_SWITCH("Mic 2"),
 	SOC_DAPM_PIN_SWITCH("LineIn Left"),
@@ -191,6 +193,8 @@ static struct snd_kcontrol_new mop500_ab8500_ctrls[] = {
 static int mop500_ab8500_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+
+	dev_dbg(rtd->card->dev, "start\n");
 
 	/* Set audio-clock source */
 	return mop500_ab8500_set_mclk(rtd->card->dev,
@@ -296,17 +300,17 @@ static int mop500_ab8500_hw_params(struct snd_pcm_substream *substream,
 	is_playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
 	switch (channels) {
 	case 1:
-		slots = 16;
+		slots = 8;
 		tx_slots = (is_playback) ? TX_SLOT_MONO : 0;
 		rx_slots = (is_playback) ? 0 : RX_SLOT_MONO;
 		break;
 	case 2:
-		slots = 16;
+		slots = 8;
 		tx_slots = (is_playback) ? TX_SLOT_STEREO : 0;
 		rx_slots = (is_playback) ? 0 : RX_SLOT_STEREO;
 		break;
 	case 8:
-		slots = 16;
+		slots = 8;
 		tx_slots = (is_playback) ? TX_SLOT_8CH : 0;
 		rx_slots = (is_playback) ? 0 : RX_SLOT_8CH;
 		break;
@@ -414,7 +418,7 @@ int mop500_ab8500_machine_init(struct snd_soc_pcm_runtime *rtd)
 	ret |= snd_soc_dapm_disable_pin(dapm, "LineOut Left");
 	ret |= snd_soc_dapm_disable_pin(dapm, "LineOut Right");
 	ret |= snd_soc_dapm_disable_pin(dapm, "Vibra 1");
-	ret |= snd_soc_dapm_disable_pin(dapm, "Vibra 2");
+	//ret |= snd_soc_dapm_disable_pin(dapm, "Vibra 2");
 	ret |= snd_soc_dapm_disable_pin(dapm, "Mic 1");
 	ret |= snd_soc_dapm_disable_pin(dapm, "Mic 2");
 	ret |= snd_soc_dapm_disable_pin(dapm, "LineIn Left");

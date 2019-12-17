@@ -9,6 +9,7 @@
  *
  * License terms:
  */
+#define DEBUG
 
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -350,7 +351,7 @@ static int configure_multichannel(struct ux500_msp *msp,
 static int enable_msp(struct ux500_msp *msp, struct ux500_msp_config *config)
 {
 	int status = 0;
-	u32 reg_val_DMACR, reg_val_GCR;
+	u32 reg_val_DMACR, reg_val_GCR, reg_val_IMSC;
 
 	/* Configure msp with protocol dependent settings */
 	configure_protocol(msp, config);
@@ -390,6 +391,17 @@ static int enable_msp(struct ux500_msp *msp, struct ux500_msp_config *config)
 	reg_val_GCR = readl(msp->registers + MSP_GCR);
 	writel(reg_val_GCR | FRAME_GEN_ENABLE, msp->registers + MSP_GCR);
 
+	/* Enable interrupts */
+	reg_val_IMSC = readl(msp->registers + MSP_IMSC);
+	dev_err(msp->dev, "IMSC: 0x%x\n", reg_val_IMSC);
+	reg_val_IMSC |= RX_OVERRUN_ERROR_INT | RX_FSYNC_ERR_INT | TX_UNDERRUN_ERR_INT | TX_FSYNC_ERR_INT;
+	dev_err(msp->dev, "IMSC: 0x%x\n", reg_val_IMSC);
+	writel(reg_val_IMSC, msp->registers + MSP_IMSC);
+
+	dev_err(msp->dev, "%s: RIS: 0x%x\n", __func__, readl(msp->registers + MSP_RIS));
+
+	writel(reg_val_IMSC, msp->registers + MSP_ICR);
+
 	return status;
 }
 
@@ -397,6 +409,8 @@ static void flush_fifo_rx(struct ux500_msp *msp)
 {
 	u32 reg_val_DR, reg_val_GCR, reg_val_FLR;
 	u32 limit = 32;
+
+	dev_err(msp->dev, "%s: RIS: 0x%x\n", __func__, readl(msp->registers + MSP_RIS));
 
 	reg_val_GCR = readl(msp->registers + MSP_GCR);
 	writel(reg_val_GCR | RX_ENABLE, msp->registers + MSP_GCR);
@@ -414,6 +428,8 @@ static void flush_fifo_tx(struct ux500_msp *msp)
 {
 	u32 reg_val_TSTDR, reg_val_GCR, reg_val_FLR;
 	u32 limit = 32;
+
+	dev_err(msp->dev, "%s: RIS: 0x%x\n", __func__, readl(msp->registers + MSP_RIS));
 
 	reg_val_GCR = readl(msp->registers + MSP_GCR);
 	writel(reg_val_GCR | TX_ENABLE, msp->registers + MSP_GCR);
@@ -495,12 +511,15 @@ int ux500_msp_i2s_open(struct ux500_msp *msp,
 	flush_fifo_rx(msp);
 
 	msp->msp_state = MSP_STATE_CONFIGURED;
+	dev_err(msp->dev, "%s: RIS: 0x%x\n", __func__, readl(msp->registers + MSP_RIS));
 	return 0;
 }
 
 static void disable_msp_rx(struct ux500_msp *msp)
 {
 	u32 reg_val_GCR, reg_val_DMACR, reg_val_IMSC;
+
+	dev_err(msp->dev, "%s: RIS: 0x%x\n", __func__, readl(msp->registers + MSP_RIS));
 
 	reg_val_GCR = readl(msp->registers + MSP_GCR);
 	writel(reg_val_GCR & ~RX_ENABLE, msp->registers + MSP_GCR);
@@ -518,6 +537,8 @@ static void disable_msp_tx(struct ux500_msp *msp)
 {
 	u32 reg_val_GCR, reg_val_DMACR, reg_val_IMSC;
 
+	dev_err(msp->dev, "%s: RIS: 0x%x\n", __func__, readl(msp->registers + MSP_RIS));
+
 	reg_val_GCR = readl(msp->registers + MSP_GCR);
 	writel(reg_val_GCR & ~TX_ENABLE, msp->registers + MSP_GCR);
 	reg_val_DMACR = readl(msp->registers + MSP_DMACR);
@@ -534,6 +555,8 @@ static int disable_msp(struct ux500_msp *msp, unsigned int dir)
 {
 	u32 reg_val_GCR;
 	unsigned int disable_tx, disable_rx;
+
+	dev_err(msp->dev, "%s: RIS: 0x%x\n", __func__, readl(msp->registers + MSP_RIS));
 
 	reg_val_GCR = readl(msp->registers + MSP_GCR);
 	disable_tx = dir & MSP_DIR_TX;
@@ -586,6 +609,7 @@ int ux500_msp_i2s_trigger(struct ux500_msp *msp, int cmd, int direction)
 			enable_bit = TX_ENABLE;
 		else
 			enable_bit = RX_ENABLE;
+		dev_err(msp->dev, "%s: RIS: 0x%x\n", __func__, readl(msp->registers + MSP_RIS));
 		reg_val_GCR = readl(msp->registers + MSP_GCR);
 		writel(reg_val_GCR | enable_bit, msp->registers + MSP_GCR);
 		break;
@@ -635,6 +659,8 @@ int ux500_msp_i2s_close(struct ux500_msp *msp, unsigned int dir)
 		writel(0, msp->registers + MSP_RCE1);
 		writel(0, msp->registers + MSP_RCE2);
 		writel(0, msp->registers + MSP_RCE3);
+	} else {
+		dev_err(msp->dev, "I'm busy, sorry. Bye\n");
 	}
 
 	return status;
@@ -669,6 +695,18 @@ static int ux500_msp_i2s_of_init_msp(struct platform_device *pdev,
 	return 0;
 }
 
+static irqreturn_t msp_irq_handler(int irq, void *dev_id)
+{
+	struct ux500_msp *msp = dev_id;
+	u32 events = readl(msp->registers + MSP_MIS);
+
+	dev_err(msp->dev, "MSP IRQ: 0x%x\n", events);
+
+	/* Clear handled interrupts */
+	writel(events, msp->registers + MSP_ICR);
+	return IRQ_HANDLED;
+}
+
 int ux500_msp_i2s_init_msp(struct platform_device *pdev,
 			struct ux500_msp **msp_p,
 			struct msp_i2s_platform_data *platform_data)
@@ -676,7 +714,7 @@ int ux500_msp_i2s_init_msp(struct platform_device *pdev,
 	struct resource *res = NULL;
 	struct device_node *np = pdev->dev.of_node;
 	struct ux500_msp *msp;
-	int ret;
+	int ret, irq;
 
 	*msp_p = devm_kzalloc(&pdev->dev, sizeof(struct ux500_msp), GFP_KERNEL);
 	msp = *msp_p;
@@ -718,6 +756,18 @@ int ux500_msp_i2s_init_msp(struct platform_device *pdev,
 
 	msp->msp_state = MSP_STATE_IDLE;
 	msp->loopback_enable = 0;
+
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0) {
+		dev_err(&pdev->dev, "no irq\n");
+		return 0;
+	}
+
+	ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
+					msp_irq_handler, IRQF_ONESHOT, "msp", msp);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "failed to request irq: %d\n", ret);
+	}
 
 	return 0;
 }

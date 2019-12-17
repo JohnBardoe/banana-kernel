@@ -8,6 +8,7 @@
  *
  * License terms:
  */
+#define DEBUG
 
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -467,6 +468,19 @@ static int ux500_msp_dai_prepare(struct snd_pcm_substream *substream,
 	dev_dbg(dai->dev, "%s: MSP %d (%s): Enter (rate = %d).\n", __func__,
 		dai->id, snd_pcm_stream_str(substream), runtime->rate);
 
+	if (drvdata->enabled & BIT(substream->stream)) {
+		dev_warn(dai->dev, "Already enabled, closing\n");
+
+		ret = ux500_msp_i2s_close(drvdata->msp,
+					  substream->stream == SNDRV_PCM_STREAM_PLAYBACK ? MSP_DIR_TX : MSP_DIR_RX);
+		if (ret) {
+			dev_err(dai->dev,
+				"%s: Error: MSP %d (%s): Unable to close i2s.\n",
+				__func__, dai->id, snd_pcm_stream_str(substream));
+			return ret;
+		}
+	}
+
 	setup_msp_config(substream, dai, &msp_config);
 
 	ret = ux500_msp_i2s_open(drvdata->msp, &msp_config);
@@ -475,6 +489,8 @@ static int ux500_msp_dai_prepare(struct snd_pcm_substream *substream,
 			__func__, ret);
 		return ret;
 	}
+
+	drvdata->enabled |= BIT(substream->stream);
 
 	/* Set OPP-level */
 	if ((drvdata->fmt & SND_SOC_DAIFMT_MASTER_MASK) &&
@@ -674,7 +690,9 @@ static int ux500_msp_dai_of_probe(struct snd_soc_dai *dai)
 		return -ENOMEM;
 
 	playback_dma_data->addr = drvdata->msp->playback_dma_data.tx_rx_addr;
+	playback_dma_data->chan_name = "tx";
 	capture_dma_data->addr = drvdata->msp->capture_dma_data.tx_rx_addr;
+	capture_dma_data->chan_name = "rx";
 
 	playback_dma_data->maxburst = 4;
 	capture_dma_data->maxburst = 4;
@@ -789,6 +807,8 @@ static int ux500_msp_drv_probe(struct platform_device *pdev)
 			__func__, ret);
 		return ret;
 	}
+
+	dev_err(&pdev->dev, "CLK: %ld\n", clk_get_rate(drvdata->clk));
 
 	ret = ux500_msp_i2s_init_msp(pdev, &drvdata->msp,
 				pdev->dev.platform_data);

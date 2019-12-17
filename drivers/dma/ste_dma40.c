@@ -5,6 +5,7 @@
  * Author: Per Forlin <per.forlin@stericsson.com> for ST-Ericsson
  * Author: Jonas Aaberg <jonas.aberg@stericsson.com> for ST-Ericsson
  */
+#define DEBUG
 
 #include <linux/dma-mapping.h>
 #include <linux/kernel.h>
@@ -1481,6 +1482,12 @@ static dma_cookie_t d40_tx_submit(struct dma_async_tx_descriptor *tx)
 
 static int d40_start(struct d40_chan *d40c)
 {
+	if (d40c->dma_cfg.dev_type == 30 ||
+	    d40c->dma_cfg.dev_type == 31 ||
+	    d40c->dma_cfg.dev_type == 14) {
+		dev_info(chan2dev(d40c), "start channel device type %d\n",
+			 d40c->dma_cfg.dev_type);
+	}
 	return d40_channel_execute_command(d40c, D40_DMA_RUN);
 }
 
@@ -1699,11 +1706,22 @@ static irqreturn_t d40_handle_interrupt(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static void dump_half(struct d40_chan *d40c, struct stedma40_half_channel_info *info)
+{
+	chan_err(d40c, "be: %d, data_width: %d, psize: %d, flow_ctrl: %d\n",
+		info->big_endian, info->data_width, info->psize, info->flow_ctrl);
+}
+
 static int d40_validate_conf(struct d40_chan *d40c,
 			     struct stedma40_chan_cfg *conf)
 {
 	int res = 0;
 	bool is_log = conf->mode == STEDMA40_MODE_LOGICAL;
+
+	chan_err(d40c, "dir: %d, highprio: %d, rt: %d, mode: %d, mode_opt: %d, dev_type: %d, fixed: %d, phy: %d\n",
+		conf->dir, conf->high_priority, conf->realtime, conf->mode, conf->mode_opt, conf->dev_type, conf->use_fixed_channel, conf->phy_channel);
+	dump_half(d40c, &conf->src_info);
+	dump_half(d40c, &conf->dst_info);
 
 	if (!conf->dir) {
 		chan_err(d40c, "Invalid direction.\n");
@@ -1842,6 +1860,8 @@ static int d40_allocate_channel(struct d40_chan *d40c, bool *first_phy_user)
 	bool is_src;
 	bool is_log = d40c->dma_cfg.mode == STEDMA40_MODE_LOGICAL;
 
+	dev_info(chan2dev(d40c), "ENTER %s\n", __func__);
+
 	phys = d40c->base->phy_res;
 	num_phy_chans = d40c->base->num_phy_chans;
 
@@ -1952,6 +1972,8 @@ out:
 	else
 		d40c->base->lookup_phy_chans[d40c->phy_chan->num] = d40c;
 
+	dev_info(chan2dev(d40c), "EXIT OK %s\n", __func__);
+
 	return 0;
 
 }
@@ -1959,6 +1981,8 @@ out:
 static int d40_config_memcpy(struct d40_chan *d40c)
 {
 	dma_cap_mask_t cap = d40c->chan.device->cap_mask;
+
+	dev_info(chan2dev(d40c), "ENTER %s\n", __func__);
 
 	if (dma_has_cap(DMA_MEMCPY, cap) && !dma_has_cap(DMA_SLAVE, cap)) {
 		d40c->dma_cfg = dma40_memcpy_conf_log;
@@ -1982,6 +2006,8 @@ static int d40_config_memcpy(struct d40_chan *d40c)
 		chan_err(d40c, "No memcpy\n");
 		return -EINVAL;
 	}
+
+	dev_info(chan2dev(d40c), "EXIT OK %s\n", __func__);
 
 	return 0;
 }
@@ -2277,6 +2303,7 @@ bool stedma40_filter(struct dma_chan *chan, void *data)
 	int err;
 
 	if (data) {
+		dev_info(chan2dev(d40c), "VALIDATE CONF %s\n", __func__);
 		err = d40_validate_conf(d40c, info);
 		if (!err)
 			d40c->dma_cfg = *info;
@@ -2359,17 +2386,23 @@ static struct dma_chan *d40_xlate(struct of_phandle_args *dma_spec,
 	flags = dma_spec->args[2];
 
 	switch (D40_DT_FLAGS_MODE(flags)) {
-	case 0: cfg.mode = STEDMA40_MODE_LOGICAL; break;
-	case 1: cfg.mode = STEDMA40_MODE_PHYSICAL; break;
+	case 0: cfg.mode = STEDMA40_MODE_LOGICAL;
+		pr_info("d40_xlate: logical channel device %d\n", cfg.dev_type);
+		break;
+	case 1: cfg.mode = STEDMA40_MODE_PHYSICAL;
+		pr_info("d40_xlate: physical channel device %d\n", cfg.dev_type);
+		break;
 	}
 
 	switch (D40_DT_FLAGS_DIR(flags)) {
 	case 0:
 		cfg.dir = DMA_MEM_TO_DEV;
+		pr_info("d40_xlate: memory to device\n");
 		cfg.dst_info.big_endian = D40_DT_FLAGS_BIG_ENDIAN(flags);
 		break;
 	case 1:
 		cfg.dir = DMA_DEV_TO_MEM;
+		pr_info("d40_xlate: device to memory\n");
 		cfg.src_info.big_endian = D40_DT_FLAGS_BIG_ENDIAN(flags);
 		break;
 	}
@@ -2377,10 +2410,15 @@ static struct dma_chan *d40_xlate(struct of_phandle_args *dma_spec,
 	if (D40_DT_FLAGS_FIXED_CHAN(flags)) {
 		cfg.phy_channel = dma_spec->args[1];
 		cfg.use_fixed_channel = true;
+		pr_info("d40_xlate: use fixed physical channel %d\n", cfg.phy_channel);
+	} else {
+		pr_info("d40_xlate: use any channel, ignore arg %d\n", dma_spec->args[1]);
 	}
 
-	if (D40_DT_FLAGS_HIGH_PRIO(flags))
+	if (D40_DT_FLAGS_HIGH_PRIO(flags)) {
+		pr_info("d40_xlate: high prio channel\n");
 		cfg.high_priority = true;
+	}
 
 	return dma_request_channel(cap, stedma40_filter, &cfg);
 }
@@ -2393,6 +2431,8 @@ static int d40_alloc_chan_resources(struct dma_chan *chan)
 	struct d40_chan *d40c =
 		container_of(chan, struct d40_chan, chan);
 	bool is_free_phy;
+
+	dev_info(chan2dev(d40c), "ENTER %s\n", __func__);
 	spin_lock_irqsave(&d40c->lock, flags);
 
 	dma_cookie_init(chan);
@@ -2448,6 +2488,7 @@ static int d40_alloc_chan_resources(struct dma_chan *chan)
 	pm_runtime_mark_last_busy(d40c->base->dev);
 	pm_runtime_put_autosuspend(d40c->base->dev);
 	spin_unlock_irqrestore(&d40c->lock, flags);
+	dev_info(chan2dev(d40c), "EXIT %s %d\n", __func__, err);
 	return err;
 }
 

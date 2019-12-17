@@ -155,6 +155,7 @@ static int dmaengine_pcm_open(struct snd_soc_component *component,
 	struct dma_chan *chan = pcm->chan[substream->stream];
 	int ret;
 
+	dev_err(component->dev, "pcm_open: %d\n", substream->stream);
 	ret = dmaengine_pcm_set_runtime_hwparams(component, substream);
 	if (ret)
 		return ret;
@@ -267,8 +268,18 @@ static int dmaengine_pcm_new(struct snd_soc_component *component,
 				prealloc_buffer_size,
 				max_buffer_size);
 
-		if (!dmaengine_pcm_can_report_residue(dev, pcm->chan[i]))
+		if (!dmaengine_pcm_can_report_residue(dev, pcm->chan[i])) {
+			dev_err(component->dev, "residue? not ok\n");
 			pcm->flags |= SND_DMAENGINE_PCM_FLAG_NO_RESIDUE;
+		}
+
+		/*else {
+			dev_err(component->dev, "residue ok, making not\n");
+			pcm->flags |= SND_DMAENGINE_PCM_FLAG_NO_RESIDUE;
+		}*/
+
+		dev_info(component->dev,
+			"OK requested dma channel for stream: %d\n", i);
 
 		if (rtd->pcm->streams[i].pcm->name[0] == '\0') {
 			strscpy_pad(rtd->pcm->streams[i].pcm->name,
@@ -363,6 +374,8 @@ static int dmaengine_pcm_request_chan_of(struct dmaengine_pcm *pcm,
 	const char *name;
 	struct dma_chan *chan;
 
+	dev_info(dev, "%s ENTER\n", __func__);
+
 	if ((pcm->flags & SND_DMAENGINE_PCM_FLAG_NO_DT) || (!dev->of_node &&
 	    !(config && config->dma_dev && config->dma_dev->of_node)))
 		return 0;
@@ -392,8 +405,10 @@ static int dmaengine_pcm_request_chan_of(struct dmaengine_pcm *pcm,
 			if (PTR_ERR(chan) == -EPROBE_DEFER)
 				return -EPROBE_DEFER;
 			pcm->chan[i] = NULL;
+			dev_info(dev, "%s NULL channel %d name \"%s\"\n", __func__, i, name);
 		} else {
 			pcm->chan[i] = chan;
+			dev_info(dev, "%s OK got channel %d name \"%s\"\n", __func__, i, name);
 		}
 		if (pcm->flags & SND_DMAENGINE_PCM_FLAG_HALF_DUPLEX)
 			break;
@@ -402,6 +417,7 @@ static int dmaengine_pcm_request_chan_of(struct dmaengine_pcm *pcm,
 	if (pcm->flags & SND_DMAENGINE_PCM_FLAG_HALF_DUPLEX)
 		pcm->chan[1] = pcm->chan[0];
 
+	dev_info(dev, "%s EXIT OK\n", __func__);
 	return 0;
 }
 
@@ -409,14 +425,19 @@ static void dmaengine_pcm_release_chan(struct dmaengine_pcm *pcm)
 {
 	unsigned int i;
 
+	pr_info("%s ENTER\n", __func__);
+
 	for (i = SNDRV_PCM_STREAM_PLAYBACK; i <= SNDRV_PCM_STREAM_CAPTURE;
 	     i++) {
 		if (!pcm->chan[i])
 			continue;
 		dma_release_channel(pcm->chan[i]);
+		pr_info("%s release channel %d\n", __func__, i);
 		if (pcm->flags & SND_DMAENGINE_PCM_FLAG_HALF_DUPLEX)
 			break;
 	}
+
+	pr_info("%s EXIT OK\n", __func__);
 }
 
 /**

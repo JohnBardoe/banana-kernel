@@ -253,6 +253,16 @@
 				};
 			};
 		};
+
+		msp1: msp@80124000 {
+			pinctrl-names = "default";
+			pinctrl-0 = <&msp1txrx_a_1_default>;
+			status = "okay";
+		};
+
+		msp3: msp@80125000 {
+			status = "okay";
+		};
 	};
 
 	gpio-keys {
