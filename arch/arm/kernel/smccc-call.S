@@ -3,6 +3,7 @@
  * Copyright (c) 2015, Linaro Limited
  */
 #include <linux/linkage.h>
+#include <linux/arm-smccc.h>
 
 #include <asm/opcodes-sec.h>
 #include <asm/opcodes-virt.h>
@@ -27,9 +28,16 @@ UNWIND(	.fnstart)
 UNWIND(	.save	{r4-r7})
 	ldm	r12, {r4-r7}
 	\instr
-	pop	{r4-r7}
-	ldr	r12, [sp, #(4 * 4)]
+	ldr	r12, [sp, #(4 * 4 * 2)]
 	stm	r12, {r0-r3}
+	ldr	r12, [sp, #(4 * 4 * 2 + 4)]  /* quirk */
+	cmp	r12, #0
+	beq	1f  /* no quirk structure */
+	ldr	r3, [r12] /* r3 = quirk.id */
+	cmp	r3, #ARM_SMCCC_QUIRK_QCOM_A6
+	bne	1f
+	str	r6, [r12, #4]
+1:	pop	{r4-r7}
 	bx	lr
 UNWIND(	.fnend)
 	.endm
