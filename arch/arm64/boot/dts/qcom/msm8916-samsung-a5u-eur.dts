@@ -31,6 +31,40 @@
 		gpio = <&msmgpio 87 0>;
 		enable-active-high;
 	};
+
+	reg_vdd_tkey: regulator-vdd-tkey {
+		compatible = "regulator-fixed";
+		regulator-name = "touch_key";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpio = <&msmgpio 97 0>;
+		enable-active-high;
+	};
+
+	i2c-tkey {
+		compatible = "i2c-gpio";
+		sda-gpios = <&msmgpio 16 (GPIO_ACTIVE_HIGH|GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&msmgpio 17 (GPIO_ACTIVE_HIGH|GPIO_OPEN_DRAIN)>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		touchkey@20 {
+			compatible = "coreriver,tc360-touchkey";
+			reg = <0x20>;
+
+			interrupt-parent = <&msmgpio>;
+			interrupts = <98 IRQ_TYPE_EDGE_FALLING>;
+
+			vdd-supply = <&reg_vdd_tkey>;
+
+			linux,keycodes = <KEY_APPSELECT KEY_BACK>;
+
+			pinctrl-names = "default";
+			pinctrl-0 = <&tkey_default>;
+		};
+	};
 };
 
 &blsp_i2c5 {
@@ -102,6 +136,18 @@
 			pins = "gpio87";
 			drive-strength = <2>;
 			bias-disable;
+		};
+	};
+
+	tkey_default: tkey_default {
+		pinmux {
+			function = "gpio";
+			pins = "gpio98";
+		};
+		pinconf {
+			pins = "gpio98";
+			drive-strength = <2>;
+			bias-pull-up;
 		};
 	};
 
