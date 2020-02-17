@@ -46,6 +46,12 @@
 	};
 };
 
+&accel {
+	mount-matrix = "-1", "0", "0",
+			"0", "1", "0",
+			"0", "0", "1";
+};
+
 &touchkey {
 	vcc-supply = <&reg_touch_key>;
 	vdd-supply = <&reg_touch_key>;

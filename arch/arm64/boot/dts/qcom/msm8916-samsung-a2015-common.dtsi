@@ -306,7 +306,7 @@
 &blsp_i2c2 {
 	status = "okay";
 
-	bmc150@10 {
+	accel: bmc150@10 {
 		compatible = "bosch,bmc150_accel";
 		reg = <0x10>;
 		interrupt-parent = <&msmgpio>;
@@ -316,7 +316,7 @@
 		pinctrl-0 = <&accel_int_default>;
 	};
 
-	bmc150@12 {
+	magn: bmc150@12 {
 		compatible = "bosch,bmc150_magn";
 		reg = <0x12>;
 	};
