@@ -33,9 +33,11 @@
 				 <&gcc GCC_MDSS_VSYNC_CLK>,
 				 <&gcc GCC_MDSS_AXI_CLK>,
 				 <&gcc GCC_MDSS_MDP_CLK>,
+				 /*
 				 <&gcc GCC_MDSS_BYTE0_CLK>,
 				 <&gcc GCC_MDSS_PCLK0_CLK>,
 				 <&gcc GCC_MDSS_ESC0_CLK>,
+				 */
 				 <&xo_board>;
 		};
 	};
@@ -211,6 +213,13 @@
 		etm@85d000 { status = "disabled"; };
 		etm@85e000 { status = "disabled"; };
 		etm@85f000 { status = "disabled"; };
+	};
+
+	dumb {
+		compatible = "minecrell,dumb-mdss-clk";
+		clocks = <&gcc GCC_MDSS_BYTE0_CLK>,
+			 <&gcc GCC_MDSS_PCLK0_CLK>,
+			 <&gcc GCC_MDSS_ESC0_CLK>;
 	};
 
 	gpio-keys {
