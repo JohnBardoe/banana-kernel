@@ -15,9 +15,37 @@
 
 	chosen {
 		stdout-path = "serial0";
+
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		framebuffer@8e000000 {
+			status= "okay";
+			compatible = "simple-framebuffer";
+			reg = <0x0 0x8e000000 0x0 (720 * 1280 * 3)>;
+			width = <720>;
+			height = <1280>;
+			stride = <(720 * 3)>;
+			format = "r8g8b8";
+			power-domains = <&gcc MDSS_GDSC>;
+			clocks = <&gcc GCC_MDSS_AHB_CLK>,
+				 <&gcc GCC_MDSS_VSYNC_CLK>,
+				 <&gcc GCC_MDSS_AXI_CLK>,
+				 <&gcc GCC_MDSS_MDP_CLK>,
+				 <&gcc GCC_MDSS_BYTE0_CLK>,
+				 <&gcc GCC_MDSS_PCLK0_CLK>,
+				 <&gcc GCC_MDSS_ESC0_CLK>,
+				 <&xo_board>;
+		};
 	};
 
 	reserved-memory {
+		continuous_splash: framebuffer@8e000000{
+			reg = <0x0 0x8e000000 0x0 (720 * 1280 * 3)>;
+			no-map;
+		};
+
 		/* Additional memory used by Samsung firmware modifications */
 		tz-apps@85500000 {
 			reg = <0x0 0x85500000 0x0 0xb00000>;
@@ -137,7 +165,13 @@
 			status = "okay";
 		};
 
+		gpu@1c00000 {
+			status = "disabled";
+		};
+
 		mdss@1a00000 {
+			status = "disabled";
+
 			dsi@1a98000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
@@ -582,6 +616,7 @@
 	l6 {
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
 	};
 
 	l7 {

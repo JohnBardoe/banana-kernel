@@ -18,6 +18,9 @@
 		gpio = <&msmgpio 87 0>;
 		enable-active-high;
 
+		regulator-always-on;
+		regulator-boot-on;
+
 		pinctrl-names = "default";
 		pinctrl-0 = <&lcd_on_default>;
 	};
@@ -27,6 +30,9 @@
 		regulator-name = "vlcd_vci";
 		regulator-min-microvolt = <3000000>;
 		regulator-max-microvolt = <3000000>;
+
+		regulator-always-on;
+		regulator-boot-on;
 
 		gpio = <&msmgpio 87 0>;
 		enable-active-high;
