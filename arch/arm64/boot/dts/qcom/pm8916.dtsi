@@ -163,5 +163,18 @@
 			vdd-micbias-supply = <&pm8916_l13>;
 			#sound-dai-cells = <1>;
 		};
+
+		spmi_regulators: spmi_regulators  {
+			compatible = "qcom,pm8916-regulators";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			pm8916_spmi_s2: s2 {
+				regulator-always-on;
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <1562000>;
+			};
+			/* other regulators can be controlled via rpm */
+		};
 	};
 };

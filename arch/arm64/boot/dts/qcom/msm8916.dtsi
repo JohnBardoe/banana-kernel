@@ -105,6 +105,7 @@
 			next-level-cache = <&L2_0>;
 			enable-method = "psci";
 			clocks = <&apcs>;
+			cpu-supply = <&pm8916_spmi_s2>;
 			operating-points-v2 = <&cpu_opp_table>;
 			#cooling-cells = <2>;
 			power-domains = <&CPU_PD0>;
@@ -118,6 +119,7 @@
 			next-level-cache = <&L2_0>;
 			enable-method = "psci";
 			clocks = <&apcs>;
+			cpu-supply = <&pm8916_spmi_s2>;
 			operating-points-v2 = <&cpu_opp_table>;
 			#cooling-cells = <2>;
 			power-domains = <&CPU_PD1>;
@@ -131,6 +133,7 @@
 			next-level-cache = <&L2_0>;
 			enable-method = "psci";
 			clocks = <&apcs>;
+			cpu-supply = <&pm8916_spmi_s2>;
 			operating-points-v2 = <&cpu_opp_table>;
 			#cooling-cells = <2>;
 			power-domains = <&CPU_PD2>;
@@ -144,6 +147,7 @@
 			next-level-cache = <&L2_0>;
 			enable-method = "psci";
 			clocks = <&apcs>;
+			cpu-supply = <&pm8916_spmi_s2>;
 			operating-points-v2 = <&cpu_opp_table>;
 			#cooling-cells = <2>;
 			power-domains = <&CPU_PD3>;
@@ -344,15 +348,35 @@
 
 		opp-200000000 {
 			opp-hz = /bits/ 64 <200000000>;
+			opp-microvolt = <1050000>;
 		};
 		opp-400000000 {
 			opp-hz = /bits/ 64 <400000000>;
+			opp-microvolt = <1050000>;
+		};
+		opp-533330000 {
+			opp-hz = /bits/ 64 <533330000>;
+			opp-microvolt = <1150000>;
 		};
 		opp-800000000 {
 			opp-hz = /bits/ 64 <800000000>;
+			opp-microvolt = <1150000>;
 		};
 		opp-998400000 {
 			opp-hz = /bits/ 64 <998400000>;
+			opp-microvolt = <1350000>;
+		};
+		opp-1094400000 {
+			opp-hz = /bits/ 64 <1094400000>;
+			opp-microvolt = <1350000>;
+		};
+		opp-1152000000 {
+			opp-hz = /bits/ 64 <1152000000>;
+			opp-microvolt = <1350000>;
+		};
+		opp-1209600000 {
+			opp-hz = /bits/ 64 <1209600000>;
+			opp-microvolt = <1350000>;
 		};
 	};
 
@@ -1693,6 +1717,7 @@
 					compatible = "qcom,rpm-pm8916-regulators";
 
 					pm8916_s1: s1 {};
+					/* s2 is directly controlled via spmi */
 					pm8916_s3: s3 {};
 					pm8916_s4: s4 {};
 
