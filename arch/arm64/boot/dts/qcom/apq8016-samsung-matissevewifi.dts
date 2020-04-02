@@ -73,10 +73,10 @@
 			reg-names = "mic-iomux", "spkr-iomux";
 
 			pinctrl-names = "default", "sleep";
-			pinctrl-0 = <&cdc_pdm_lines_act>;
-			pinctrl-1 = <&cdc_pdm_lines_sus>;
+			pinctrl-0 = <&cdc_pdm_lines_act &ext_sec_tlmm_lines_act>;
+			pinctrl-1 = <&cdc_pdm_lines_sus &ext_sec_tlmm_lines_sus>;
 
-			qcom,model = "msm8916"; // FIXME
+			qcom,model = "samsung-matissevewifi"; 
 			qcom,audio-routing =
 				"AMIC1", "MIC BIAS External1",
 				"AMIC2", "MIC BIAS Internal2",
@@ -99,6 +99,16 @@
 				};
 				codec {
 					sound-dai = <&lpass_codec 1>, <&wcd_codec 1>;
+				};
+			};
+
+			external-dai-link@0 {
+				link-name = "Speaker";
+				cpu {
+					sound-dai = <&lpass MI2S_QUATERNARY>;
+				};
+				codec {
+					sound-dai = <&max98357a>;
 				};
 			};
 		};
@@ -185,6 +195,12 @@
 			gpios = <&msmgpio 109 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_HOMEPAGE>;
 		};
+	};
+
+	max98357a: max98357a {
+		compatible = "maxim,max98357a";
+		sdmode-gpios = <&msmgpio 100 GPIO_ACTIVE_HIGH>;
+		#sound-dai-cells = <0>;
 	};
 
 	reg_lcd: regulator-lcd {
