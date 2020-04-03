@@ -51,6 +51,7 @@
 #define DIG_CLK_CTL_D_MBHC_CLK_EN_MASK	BIT(3)
 #define DIG_CLK_CTL_D_MBHC_CLK_EN	BIT(3)
 #define DIG_CLK_CTL_TXD_CLK_EN		BIT(4)
+#define DIG_CLK_CTL_BOOST_CLK_EN	BIT(5)
 #define DIG_CLK_CTL_NCP_CLK_EN_MASK	BIT(6)
 #define DIG_CLK_CTL_NCP_CLK_EN		BIT(6)
 #define DIG_CLK_CTL_RXD_PDM_CLK_EN_MASK	BIT(7)
@@ -860,6 +861,8 @@ static const struct snd_soc_dapm_route pm8916_wcd_analog_audio_map[] = {
 	{"MIC BIAS External2", NULL, "MIC_BIAS2"},
 	{"MIC BIAS Internal2", NULL, "MIC_BIAS2"},
 	{"MIC BIAS Internal3", NULL, "MIC_BIAS1"},
+
+	{"BOOST", NULL, "BOOST_CLK"},
 };
 
 static const struct snd_soc_dapm_widget pm8916_wcd_analog_dapm_widgets[] = {
@@ -966,6 +969,7 @@ static const struct snd_soc_dapm_widget pm8916_wcd_analog_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY("RXD3_CLK", CDC_D_CDC_DIG_CLK_CTL, 2, 0, NULL, 0),
 
 	SND_SOC_DAPM_SUPPLY("TXD_CLK", CDC_D_CDC_DIG_CLK_CTL, 4, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("BOOST_CLK", CDC_D_CDC_DIG_CLK_CTL, 5, 0, NULL, 0),
 	SND_SOC_DAPM_SUPPLY("NCP_CLK", CDC_D_CDC_DIG_CLK_CTL, 6, 0, NULL, 0),
 	SND_SOC_DAPM_SUPPLY("RXD_PDM_CLK", CDC_D_CDC_DIG_CLK_CTL, 7, 0, NULL,
 			    0),
@@ -974,6 +978,9 @@ static const struct snd_soc_dapm_widget pm8916_wcd_analog_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY("A_MCLK", CDC_D_CDC_TOP_CLK_CTL, 2, 0, NULL, 0),
 	/* TX ADC and RX DAC Clock source. */
 	SND_SOC_DAPM_SUPPLY("A_MCLK2", CDC_D_CDC_TOP_CLK_CTL, 3, 0, NULL, 0),
+
+	/* Boost regulator */
+	SND_SOC_DAPM_SUPPLY("BOOST", CDC_A_BOOST_EN_CTL, 7, 0, NULL, 0),
 };
 
 static int pm8916_wcd_analog_set_jack(struct snd_soc_component *component,
