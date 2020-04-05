@@ -2208,6 +2208,7 @@ F:	drivers/*/*/qcom*
 F:	drivers/*/pm8???-*
 F:	drivers/bluetooth/btqcomsmd.c
 F:	drivers/clocksource/timer-qcom.c
+F:	drivers/cpuidle/cpuidle-qcom-spm.c
 F:	drivers/extcon/extcon-qcom*
 F:	drivers/iommu/msm*
 F:	drivers/i2c/busses/i2c-qup.c
