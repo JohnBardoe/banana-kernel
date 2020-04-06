@@ -3,7 +3,6 @@
 #include <sound/soc.h>
 #include <dt-bindings/sound/qcom,q6voice.h>
 #include "q6cvp.h"
-#include "q6cvs.h"
 #include "q6mvm.h"
 
 #define DRV_NAME	"q6voice-dai"
@@ -66,7 +65,6 @@ static struct snd_soc_dai_driver q6voice_dais[] = {
 static void voc_start(struct device *dev)
 {
 	struct q6mvm *mvm;
-	struct q6cvs *cvs;
 	struct q6cvp *cvp;
 	int ret;
 
@@ -75,12 +73,6 @@ static void voc_start(struct device *dev)
 	mvm = q6mvm_create_session();
 	if (IS_ERR(mvm)) {
 		dev_err(dev, "Failed to create mvm session: %ld\n", PTR_ERR(mvm));
-		return;
-	}
-
-	cvs = q6cvs_create_session();
-	if (IS_ERR(cvs)) {
-		dev_err(dev, "Failed to create cvs session: %ld\n", PTR_ERR(cvs));
 		return;
 	}
 
