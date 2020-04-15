@@ -10,6 +10,7 @@
 #include <dt-bindings/soc/qcom,apr.h>
 #include <dt-bindings/sound/qcom,q6afe.h>
 #include <dt-bindings/thermal/thermal.h>
+#include <dt-bindings/power/qcom-rpmpd.h>
 
 / {
 	interrupt-parent = <&intc>;
@@ -108,8 +109,8 @@
 			cpu-supply = <&pm8916_spmi_s2>;
 			operating-points-v2 = <&cpu_opp_table>;
 			#cooling-cells = <2>;
-			power-domains = <&CPU_PD0>;
-			power-domain-names = "psci";
+			power-domains = <&CPU_PD0>, <&rpmpd MSM8916_VDDMX_AO>;
+			power-domain-names = "psci", "mx";
 		};
 
 		CPU1: cpu@1 {
@@ -122,8 +123,8 @@
 			cpu-supply = <&pm8916_spmi_s2>;
 			operating-points-v2 = <&cpu_opp_table>;
 			#cooling-cells = <2>;
-			power-domains = <&CPU_PD1>;
-			power-domain-names = "psci";
+			power-domains = <&CPU_PD1>, <&rpmpd MSM8916_VDDMX_AO>;
+			power-domain-names = "psci", "mx";
 		};
 
 		CPU2: cpu@2 {
@@ -136,8 +137,8 @@
 			cpu-supply = <&pm8916_spmi_s2>;
 			operating-points-v2 = <&cpu_opp_table>;
 			#cooling-cells = <2>;
-			power-domains = <&CPU_PD2>;
-			power-domain-names = "psci";
+			power-domains = <&CPU_PD2>, <&rpmpd MSM8916_VDDMX_AO>;
+			power-domain-names = "psci", "mx";
 		};
 
 		CPU3: cpu@3 {
@@ -150,8 +151,8 @@
 			cpu-supply = <&pm8916_spmi_s2>;
 			operating-points-v2 = <&cpu_opp_table>;
 			#cooling-cells = <2>;
-			power-domains = <&CPU_PD3>;
-			power-domain-names = "psci";
+			power-domains = <&CPU_PD3>, <&rpmpd MSM8916_VDDMX_AO>;
+			power-domain-names = "psci", "mx";
 		};
 
 		L2_0: l2-cache {
@@ -343,40 +344,52 @@
 	};
 
 	cpu_opp_table: cpu_opp_table {
-		compatible = "operating-points-v2";
+		/*
+		 * FIXME: The naming here is really weird, since MSM8916 does
+		 * not have kyro. Maybe we should add a more generic compatible?
+		 */
+		compatible = "operating-points-v2-kryo-cpu";
 		opp-shared;
 
 		opp-200000000 {
 			opp-hz = /bits/ 64 <200000000>;
 			opp-microvolt = <1050000>;
+			required-opps = <&rpmpd_opp_svs_soc>;
 		};
 		opp-400000000 {
 			opp-hz = /bits/ 64 <400000000>;
 			opp-microvolt = <1050000>;
+			required-opps = <&rpmpd_opp_svs_soc>;
 		};
 		opp-533330000 {
 			opp-hz = /bits/ 64 <533330000>;
 			opp-microvolt = <1150000>;
+			required-opps = <&rpmpd_opp_nom>;
 		};
 		opp-800000000 {
 			opp-hz = /bits/ 64 <800000000>;
 			opp-microvolt = <1150000>;
+			required-opps = <&rpmpd_opp_nom>;
 		};
 		opp-998400000 {
 			opp-hz = /bits/ 64 <998400000>;
 			opp-microvolt = <1350000>;
+			required-opps = <&rpmpd_opp_super_turbo>;
 		};
 		opp-1094400000 {
 			opp-hz = /bits/ 64 <1094400000>;
 			opp-microvolt = <1350000>;
+			required-opps = <&rpmpd_opp_super_turbo>;
 		};
 		opp-1152000000 {
 			opp-hz = /bits/ 64 <1152000000>;
 			opp-microvolt = <1350000>;
+			required-opps = <&rpmpd_opp_super_turbo>;
 		};
 		opp-1209600000 {
 			opp-hz = /bits/ 64 <1209600000>;
 			opp-microvolt = <1350000>;
+			required-opps = <&rpmpd_opp_super_turbo>;
 		};
 	};
 
@@ -1711,6 +1724,40 @@
 				rpmcc: qcom,rpmcc {
 					compatible = "qcom,rpmcc-msm8916";
 					#clock-cells = <1>;
+				};
+
+				rpmpd: power-controller {
+					compatible = "qcom,msm8916-rpmpd";
+					#power-domain-cells = <1>;
+					operating-points-v2 = <&rpmpd_opp_table>;
+
+					rpmpd_opp_table: opp-table {
+						compatible = "operating-points-v2";
+
+						rpmpd_opp_ret: opp1 {
+							opp-level = <1>;
+						};
+
+						rpmpd_opp_svs: opp2 {
+							opp-level = <2>;
+						};
+
+						rpmpd_opp_svs_soc: opp3 {
+							opp-level = <3>;
+						};
+
+						rpmpd_opp_nom: opp4 {
+							opp-level = <4>;
+						};
+
+						rpmpd_opp_turbo: opp5 {
+							opp-level = <5>;
+						};
+
+						rpmpd_opp_super_turbo: opp6 {
+							opp-level = <6>;
+						};
+					};
 				};
 
 				smd_rpm_regulators: pm8916-regulators {

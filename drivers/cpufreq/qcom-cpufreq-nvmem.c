@@ -129,6 +129,16 @@ static const struct qcom_cpufreq_match_data match_data_kryo = {
 	.get_version = qcom_cpufreq_kryo_name_version,
 };
 
+static const char *msm8916_genpd_names[] = { "mx", NULL };
+
+static const struct qcom_cpufreq_match_data match_data_msm8916 = {
+	/*
+	 * FIXME: Might need to implement .get_version here to handle
+	 * different frequencies depending on speedbin/pvs version.
+	 */
+	.genpd_names = msm8916_genpd_names,
+};
+
 static const char *qcs404_genpd_names[] = { "cpr", NULL };
 
 static const struct qcom_cpufreq_match_data match_data_qcs404 = {
@@ -301,6 +311,7 @@ static struct platform_driver qcom_cpufreq_driver = {
 
 static const struct of_device_id qcom_cpufreq_match_list[] __initconst = {
 	{ .compatible = "qcom,apq8096", .data = &match_data_kryo },
+	{ .compatible = "qcom,msm8916", .data = &match_data_msm8916 },
 	{ .compatible = "qcom,msm8996", .data = &match_data_kryo },
 	{ .compatible = "qcom,qcs404", .data = &match_data_qcs404 },
 	{},
