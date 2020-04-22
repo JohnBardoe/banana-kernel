@@ -53,6 +53,7 @@
 		usb@78d9000 {
 			status = "okay";
 			dr_mode = "peripheral";
+			extcon = <&usb_vbus>;
 
 			hnp-disable;
 			srp-disable;
@@ -60,6 +61,7 @@
 
 			ulpi {
 				phy {
+					extcon = <&usb_vbus>;
 					v1p8-supply = <&pm8916_l7>;
 					v3p3-supply = <&pm8916_l13>;
 				};
@@ -88,6 +90,12 @@
 		etm@85d000 { status = "disabled"; };
 		etm@85e000 { status = "disabled"; };
 		etm@85f000 { status = "disabled"; };
+	};
+
+	// FIXME: Use extcon device provided by MUIC driver when available
+	usb_vbus: usb-vbus {
+		compatible = "linux,extcon-usb-gpio";
+		vbus-gpio = <&msmgpio 105 GPIO_ACTIVE_HIGH>;
 	};
 };
 
