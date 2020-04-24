@@ -2,12 +2,17 @@
 #ifndef _Q6_MVM_H
 #define _Q6_MVM_H
 
-struct q6mvm;
+#include "q6voice.h"
 
-struct q6mvm *q6mvm_create_session(void);
+struct q6voice_session;
 
-int q6mvm_set_dual_control(struct q6mvm *mvm);
-int q6mvm_attach(struct q6mvm *mvm, struct q6cvp *cvp);
-int q6mvm_start(struct q6mvm *mvm);
+struct q6voice_session *q6mvm_session_create(enum q6voice_path_type path);
+
+int q6mvm_set_dual_control(struct q6voice_session *mvm);
+int q6mvm_attach(struct q6voice_session *mvm, struct q6voice_session *cvp);
+int q6mvm_detach(struct q6voice_session *mvm, struct q6voice_session *cvp);
+
+int q6mvm_start(struct q6voice_session *mvm);
+int q6mvm_stop(struct q6voice_session *mvm);
 
 #endif /*_Q6_MVM_H */

@@ -1235,7 +1235,7 @@
 						};
 					};
 
-					q6mvm: q6mvm {
+					apr-service@9 {
 						compatible = "qcom,q6mvm";
 						reg = <APR_SVC_ADSP_MVM>;
 
@@ -1245,7 +1245,12 @@
 						};
 					};
 
-					q6cvp: q6cvp {
+					apr-service@a {
+						compatible = "qcom,q6cvs";
+						reg = <APR_SVC_ADSP_CVS>;
+					};
+
+					apr-service@b {
 						compatible = "qcom,q6cvp";
 						reg = <APR_SVC_ADSP_CVP>;
 					};
