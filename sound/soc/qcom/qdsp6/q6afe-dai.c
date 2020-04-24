@@ -321,8 +321,6 @@ static void q6afe_dai_shutdown(struct snd_pcm_substream *substream,
 		dev_err(dai->dev, "fail to close AFE port (%d)\n", rc);
 
 	dai_data->is_port_started[dai->id] = false;
-
-	dev_err(dai->dev, "AFE port %x stopped\n", dai->id);
 }
 
 static int q6afe_dai_prepare(struct snd_pcm_substream *substream,
@@ -373,8 +371,6 @@ static int q6afe_dai_prepare(struct snd_pcm_substream *substream,
 		return rc;
 	}
 	dai_data->is_port_started[dai->id] = true;
-
-	dev_err(dai->dev, "AFE port %x started\n", dai->id);
 
 	return 0;
 }
