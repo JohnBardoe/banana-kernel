@@ -4,7 +4,7 @@
 #include "q6cvs.h"
 #include "q6voice-common.h"
 
-int q6cvs_probe(struct apr_device *adev)
+static int q6cvs_probe(struct apr_device *adev)
 {
 	return q6voice_common_probe(adev, Q6VOICE_SERVICE_CVS);
 }

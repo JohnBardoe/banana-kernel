@@ -1,3 +1,4 @@
+#include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
@@ -63,7 +64,7 @@ static int q6voice_path_start(struct q6voice_path *p)
 	struct q6voice_session *mvm, *cvp;
 	int ret;
 
-	dev_info(dev, "start path %d\n", p->type);
+	dev_dbg(dev, "start path %d\n", p->type);
 
 	mvm = p->runtime->sessions[Q6VOICE_SERVICE_MVM];
 	if (!mvm) {
@@ -71,12 +72,6 @@ static int q6voice_path_start(struct q6voice_path *p)
 		if (IS_ERR(mvm))
 			return PTR_ERR(mvm);
 		p->runtime->sessions[Q6VOICE_SERVICE_MVM] = mvm;
-	}
-
-	ret = q6mvm_set_dual_control(mvm);
-	if (ret) {
-		dev_err(dev, "failed to set dual control: %d\n", ret);
-		return ret;
 	}
 
 	cvp = p->runtime->sessions[Q6VOICE_SERVICE_CVP];
@@ -89,19 +84,19 @@ static int q6voice_path_start(struct q6voice_path *p)
 		p->runtime->sessions[Q6VOICE_SERVICE_CVP] = cvp;
 	}
 
-	ret = q6cvp_enable(cvp);
+	ret = q6cvp_enable(cvp, true);
 	if (ret) {
 		dev_err(dev, "failed to enable cvp: %d\n", ret);
 		goto cvp_err;
 	}
 
-	ret = q6mvm_attach(mvm, cvp);
+	ret = q6mvm_attach(mvm, cvp, true);
 	if (ret) {
 		dev_err(dev, "failed to attach cvp to mvm: %d\n", ret);
 		goto attach_err;
 	}
 
-	ret = q6mvm_start(mvm);
+	ret = q6mvm_start(mvm, true);
 	if (ret) {
 		dev_err(dev, "failed to start voice: %d\n", ret);
 		goto start_err;
@@ -110,11 +105,11 @@ static int q6voice_path_start(struct q6voice_path *p)
 	return ret;
 
 start_err:
-	q6mvm_stop(mvm);
+	q6mvm_start(mvm, false);
 attach_err:
-	q6mvm_detach(mvm, cvp);
+	q6mvm_attach(mvm, cvp, false);
 cvp_err:
-	q6cvp_disable(cvp);
+	q6cvp_enable(cvp, false);
 	return ret;
 }
 
@@ -163,17 +158,17 @@ static void q6voice_path_stop(struct q6voice_path *p)
 	struct q6voice_session *cvp = p->runtime->sessions[Q6VOICE_SERVICE_CVP];
 	int ret;
 
-	dev_info(dev, "stop path %d\n", p->type);
+	dev_dbg(dev, "stop path %d\n", p->type);
 
-	ret = q6mvm_stop(mvm);
+	ret = q6mvm_start(mvm, false);
 	if (ret)
 		dev_err(dev, "failed to stop voice: %d\n", ret);
 
-	ret = q6mvm_detach(mvm, cvp);
+	ret = q6mvm_attach(mvm, cvp, false);
 	if (ret)
 		dev_err(dev, "failed to detach cvp from mvm: %d\n", ret);
 
-	ret = q6cvp_disable(cvp);
+	ret = q6cvp_enable(cvp, false);
 	if (ret)
 		dev_err(dev, "failed to disable cvp: %d\n", ret);
 }
@@ -213,3 +208,6 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(q6voice_stop);
+
+MODULE_DESCRIPTION("Q6Voice driver");
+MODULE_LICENSE("GPL v2");

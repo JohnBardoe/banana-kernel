@@ -1,3 +1,4 @@
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/soc/qcom/apr.h>
@@ -15,7 +16,6 @@ struct q6voice_service {
 	struct q6voice_session *sessions[Q6VOICE_PATH_COUNT];
 };
 
-/* FIXME: Is there a good way to avoid global state here? */
 static DEFINE_SPINLOCK(q6voice_services_lock);
 static struct q6voice_service *q6voice_services[Q6VOICE_SERVICE_COUNT] = {0};
 
@@ -24,8 +24,6 @@ int q6voice_common_probe(struct apr_device *adev, enum q6voice_service_type type
 	struct device *dev = &adev->dev;
 	struct q6voice_service *svc, *current_svc;
 	unsigned long flags;
-
-	dev_info(dev, "Hello World!\n");
 
 	if (type >= Q6VOICE_SERVICE_COUNT)
 		return -EINVAL;
@@ -48,6 +46,7 @@ int q6voice_common_probe(struct apr_device *adev, enum q6voice_service_type type
 
 	return current_svc ? -EEXIST : 0;
 }
+EXPORT_SYMBOL_GPL(q6voice_common_probe);
 
 int q6voice_common_remove(struct apr_device *adev)
 {
@@ -63,6 +62,7 @@ int q6voice_common_remove(struct apr_device *adev)
 	/* TODO: Should probably free up sessions here??? */
 	return 0;
 }
+EXPORT_SYMBOL_GPL(q6voice_common_remove);
 
 static void q6voice_session_free(struct kref *ref)
 {
@@ -97,6 +97,7 @@ void q6voice_session_release(struct q6voice_session *s)
 
 	kref_put(&s->refcount, q6voice_session_free);
 }
+EXPORT_SYMBOL_GPL(q6voice_session_release);
 
 struct q6voice_session *
 q6voice_session_create(enum q6voice_service_type type, enum q6voice_path_type path,
@@ -134,7 +135,7 @@ q6voice_session_create(enum q6voice_service_type type, enum q6voice_path_type pa
 	svc->sessions[path] = s;
 	spin_unlock_irqrestore(&svc->lock, flags);
 
-	dev_info(s->dev, "create session\n");
+	dev_dbg(s->dev, "create session\n");
 
 	ret = q6voice_common_send(s, hdr);
 	if (ret)
@@ -146,7 +147,7 @@ q6voice_session_create(enum q6voice_service_type type, enum q6voice_path_type pa
 		goto err;
 	}
 
-	dev_info(s->dev, "handle: %d\n", s->handle);
+	dev_dbg(s->dev, "handle: %d\n", s->handle);
 
 	return s;
 
@@ -154,6 +155,7 @@ err:
 	q6voice_session_release(s);
 	return ERR_PTR(ret);
 }
+EXPORT_SYMBOL_GPL(q6voice_session_create);
 
 static void q6voice_session_callback(struct q6voice_session *s,
 				     struct apr_resp_pkt *data)
@@ -164,8 +166,8 @@ static void q6voice_session_callback(struct q6voice_session *s,
 	if (data->hdr.opcode != APR_BASIC_RSP_RESULT)
 		return; /* Not handled here */
 
-	dev_info(s->dev, "basic result: opcode %#x, status: %#x\n",
-		 result->opcode, result->status);
+	dev_dbg(s->dev, "basic result: opcode %#x, status: %#x\n",
+		result->opcode, result->status);
 
 	spin_lock_irqsave(&s->lock, flags);
 	if (result->opcode != s->expected_opcode) {
@@ -198,7 +200,7 @@ int q6voice_common_callback(struct apr_device *adev, struct apr_resp_pkt *data)
 	struct q6voice_session *s;
 	unsigned long flags;
 
-	dev_info(dev, "callback: %#x\n", data->hdr.opcode);
+	dev_dbg(dev, "callback: %#x\n", data->hdr.opcode);
 
 	if (data->hdr.dest_port >= Q6VOICE_PATH_COUNT) {
 		dev_warn(dev, "callback() called for unhandled/invalid path: %d\n",
@@ -222,6 +224,7 @@ int q6voice_common_callback(struct apr_device *adev, struct apr_resp_pkt *data)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(q6voice_common_callback);
 
 int q6voice_common_send(struct q6voice_session *s, struct apr_hdr *hdr)
 {
@@ -258,3 +261,7 @@ int q6voice_common_send(struct q6voice_session *s, struct apr_hdr *hdr)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(q6voice_common_send);
+
+MODULE_DESCRIPTION("Q6Voice common session management");
+MODULE_LICENSE("GPL v2");

@@ -26,32 +26,20 @@ struct q6voice_session *q6cvp_session_create(enum q6voice_path_type path,
 
 	return q6voice_session_create(Q6VOICE_SERVICE_CVP, path, &cmd.hdr);
 }
+EXPORT_SYMBOL_GPL(q6cvp_session_create);
 
-int q6cvp_enable(struct q6voice_session *cvp)
+int q6cvp_enable(struct q6voice_session *cvp, bool state)
 {
 	struct apr_pkt cmd;
 
-	dev_info(cvp->dev, "enable\n");
-
 	cmd.hdr.pkt_size = APR_HDR_SIZE;
-	cmd.hdr.opcode = VSS_IVOCPROC_CMD_ENABLE;
+	cmd.hdr.opcode = state ? VSS_IVOCPROC_CMD_ENABLE : VSS_IVOCPROC_CMD_DISABLE;
 
 	return q6voice_common_send(cvp, &cmd.hdr);
 }
+EXPORT_SYMBOL_GPL(q6cvp_enable);
 
-int q6cvp_disable(struct q6voice_session *cvp)
-{
-	struct apr_pkt cmd;
-
-	dev_info(cvp->dev, "disable\n");
-
-	cmd.hdr.pkt_size = APR_HDR_SIZE;
-	cmd.hdr.opcode = VSS_IVOCPROC_CMD_DISABLE;
-
-	return q6voice_common_send(cvp, &cmd.hdr);
-}
-
-int q6cvp_probe(struct apr_device *adev)
+static int q6cvp_probe(struct apr_device *adev)
 {
 	return q6voice_common_probe(adev, Q6VOICE_SERVICE_CVP);
 }

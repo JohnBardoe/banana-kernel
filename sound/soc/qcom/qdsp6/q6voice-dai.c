@@ -11,9 +11,6 @@ static int q6voice_dai_startup(struct snd_pcm_substream *substream,
 {
 	struct q6voice *v = snd_soc_dai_get_drvdata(dai);
 
-	dev_info(dai->dev, "startup %s\n",
-		 substream->stream == SNDRV_PCM_STREAM_PLAYBACK ? "playback" : "capture");
-
 	return q6voice_start(v, Q6VOICE_PATH_VOICE, substream->stream);
 }
 
@@ -21,9 +18,6 @@ static void q6voice_dai_shutdown(struct snd_pcm_substream *substream,
 				 struct snd_soc_dai *dai)
 {
 	struct q6voice *v = snd_soc_dai_get_drvdata(dai);
-
-	dev_info(dai->dev, "shutdown %s\n",
-		 substream->stream == SNDRV_PCM_STREAM_PLAYBACK ? "playback" : "capture");
 
 	q6voice_stop(v, Q6VOICE_PATH_VOICE, substream->stream);
 }
@@ -40,7 +34,6 @@ static struct snd_soc_dai_driver q6voice_dais[] = {
 		/* The constraints here are not really meaningful... */
 		.playback = {
 			.stream_name =	"CS-VOICE Playback",
-			/*.aif_name =	"CS-VOICE_DL1",*/
 			.formats =	SNDRV_PCM_FMTBIT_S16_LE,
 			.rates =	SNDRV_PCM_RATE_8000,
 			.rate_min =	8000,
@@ -50,7 +43,6 @@ static struct snd_soc_dai_driver q6voice_dais[] = {
 		},
 		.capture = {
 			.stream_name =	"CS-VOICE Capture",
-			/*.aif_name =	"CS-VOICE_UL1",*/
 			.formats =	SNDRV_PCM_FMTBIT_S16_LE,
 			.rates =	SNDRV_PCM_RATE_8000,
 			.rate_min =	8000,
@@ -80,40 +72,34 @@ static int q6voice_dai_open(struct snd_soc_component *component,
 	return 0;
 }
 
-/* FIXME: Stop hard-coding this (right now this is in q6routing.c) */
-/*
 static const struct snd_soc_dapm_widget q6voice_dapm_widgets[] = {
 	SND_SOC_DAPM_AIF_IN("CS-VOICE_DL1", "CS-VOICE Playback", 0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("CS-VOICE_UL1", "CS-VOICE Capture", 0, 0, 0, 0),
 };
 
 static const struct snd_soc_dapm_route q6voice_dapm_routes[] = {
+	/* TODO: Make routing configurable */
 	{"CS-VOICE_UL1", NULL, "TERT_MI2S_TX"},
 	{"PRI_MI2S_RX", NULL, "CS-VOICE_DL1"},
-
-	{"CS-VOICE_DL1", NULL, "CS-VOICE Playback" },
-	{"CS-VOICE Capture", NULL, "CS-VOICE_UL1"},
 };
-*/
 
 static const struct snd_soc_component_driver q6voice_dai_component = {
 	.name = DRV_NAME,
 	.open = q6voice_dai_open,
 
-/*
-	.dapm_widgets	= q6voice_dapm_widgets,
+	.dapm_widgets = q6voice_dapm_widgets,
 	.num_dapm_widgets = ARRAY_SIZE(q6voice_dapm_widgets),
-	.dapm_routes	= q6voice_dapm_routes,
-	.num_dapm_routes  = ARRAY_SIZE(q6voice_dapm_routes),
-*/
+	.dapm_routes = q6voice_dapm_routes,
+	.num_dapm_routes = ARRAY_SIZE(q6voice_dapm_routes),
+
+	/* Needs to probe after q6afe */
+	.probe_order = SND_SOC_COMP_ORDER_LATE,
 };
 
 static int q6voice_dai_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct q6voice *v;
-
-	dev_info(dev, "Hello World!\n");
 
 	v = q6voice_create(dev);
 	if (IS_ERR(v))
@@ -141,5 +127,5 @@ static struct platform_driver q6voice_dai_platform_driver = {
 };
 module_platform_driver(q6voice_dai_platform_driver);
 
-MODULE_DESCRIPTION("Q6VOICE dai driver");
+MODULE_DESCRIPTION("Q6Voice dai driver");
 MODULE_LICENSE("GPL v2");

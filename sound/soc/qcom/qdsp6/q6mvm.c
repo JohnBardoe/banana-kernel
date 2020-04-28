@@ -6,24 +6,19 @@
 #include "q6voice-common.h"
 #include "q6voice-downstream.h"
 
-struct q6voice_session *q6mvm_session_create(enum q6voice_path_type path)
+static inline const char *q6mvm_session_name(enum q6voice_path_type path)
 {
-	struct mvm_create_ctl_session_cmd cmd;
-
-	cmd.hdr.pkt_size = sizeof(cmd);
-	cmd.hdr.opcode = VSS_IMVM_CMD_CREATE_PASSIVE_CONTROL_SESSION;
-
-	strlcpy(cmd.mvm_session.name, "default modem voice",
-		strlen("default modem voice")+1);
-
-	return q6voice_session_create(Q6VOICE_SERVICE_MVM, path, &cmd.hdr);
+	switch (path) {
+	case Q6VOICE_PATH_VOICE:
+		return "default modem voice";
+	default:
+		return NULL;
+	}
 }
 
-int q6mvm_set_dual_control(struct q6voice_session *mvm)
+static int q6mvm_set_dual_control(struct q6voice_session *mvm)
 {
 	struct mvm_modem_dual_control_session_cmd cmd;
-
-	dev_info(mvm->dev, "set dual control\n");
 
 	cmd.hdr.pkt_size = sizeof(cmd);
 	cmd.hdr.opcode = VSS_IMVM_CMD_SET_POLICY_DUAL_CONTROL;
@@ -33,57 +28,60 @@ int q6mvm_set_dual_control(struct q6voice_session *mvm)
 	return q6voice_common_send(mvm, &cmd.hdr);
 }
 
-int q6mvm_attach(struct q6voice_session *mvm, struct q6voice_session *cvp)
+struct q6voice_session *q6mvm_session_create(enum q6voice_path_type path)
+{
+	struct mvm_create_ctl_session_cmd cmd;
+	struct q6voice_session *mvm;
+	const char *session_name;
+	int ret;
+
+	cmd.hdr.pkt_size = sizeof(cmd);
+	cmd.hdr.opcode = VSS_IMVM_CMD_CREATE_PASSIVE_CONTROL_SESSION;
+
+	session_name = q6mvm_session_name(path);
+	if (session_name)
+		strlcpy(cmd.mvm_session.name, session_name,
+			sizeof(cmd.mvm_session.name));
+
+	mvm = q6voice_session_create(Q6VOICE_SERVICE_MVM, path, &cmd.hdr);
+	if (IS_ERR(mvm))
+		return mvm;
+
+	ret = q6mvm_set_dual_control(mvm);
+	if (ret) {
+		dev_err(mvm->dev, "failed to set dual control: %d\n", ret);
+		q6voice_session_release(mvm);
+		return ERR_PTR(ret);
+	}
+
+	return mvm;
+}
+EXPORT_SYMBOL_GPL(q6mvm_session_create);
+
+int q6mvm_attach(struct q6voice_session *mvm, struct q6voice_session *cvp,
+		 bool state)
 {
 	struct mvm_attach_vocproc_cmd cmd;
 
-	dev_info(mvm->dev, "attach vocproc: %d\n", cvp->handle);
-
 	cmd.hdr.pkt_size = sizeof(cmd);
-	cmd.hdr.opcode = VSS_IMVM_CMD_ATTACH_VOCPROC;
+	cmd.hdr.opcode = state ? VSS_IMVM_CMD_ATTACH_VOCPROC : VSS_IMVM_CMD_DETACH_VOCPROC;
 
 	cmd.mvm_attach_cvp_handle.handle = cvp->handle;
 
 	return q6voice_common_send(mvm, &cmd.hdr);
 }
+EXPORT_SYMBOL_GPL(q6mvm_attach);
 
-int q6mvm_detach(struct q6voice_session *mvm, struct q6voice_session *cvp)
-{
-	struct mvm_detach_vocproc_cmd cmd;
-
-	dev_info(mvm->dev, "detach vocproc: %d\n", cvp->handle);
-
-	cmd.hdr.pkt_size = sizeof(cmd);
-	cmd.hdr.opcode = VSS_IMVM_CMD_DETACH_VOCPROC;
-
-	cmd.mvm_detach_cvp_handle.handle = cvp->handle;
-
-	return q6voice_common_send(mvm, &cmd.hdr);
-}
-
-int q6mvm_start(struct q6voice_session *mvm)
+int q6mvm_start(struct q6voice_session *mvm, bool state)
 {
 	struct apr_pkt cmd;
 
-	dev_info(mvm->dev, "start\n");
-
 	cmd.hdr.pkt_size = APR_HDR_SIZE;
-	cmd.hdr.opcode = VSS_IMVM_CMD_START_VOICE;
+	cmd.hdr.opcode = state ? VSS_IMVM_CMD_START_VOICE : VSS_IMVM_CMD_STOP_VOICE;
 
 	return q6voice_common_send(mvm, &cmd.hdr);
 }
-
-int q6mvm_stop(struct q6voice_session *mvm)
-{
-	struct apr_pkt cmd;
-
-	dev_info(mvm->dev, "stop\n");
-
-	cmd.hdr.pkt_size = APR_HDR_SIZE;
-	cmd.hdr.opcode = VSS_IMVM_CMD_STOP_VOICE;
-
-	return q6voice_common_send(mvm, &cmd.hdr);
-}
+EXPORT_SYMBOL_GPL(q6mvm_start);
 
 static int q6mvm_probe(struct apr_device *adev)
 {
