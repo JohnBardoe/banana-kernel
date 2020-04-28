@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+// Copyright (c) 2020, Stephan Gerhold
+
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
@@ -209,5 +213,6 @@ out:
 }
 EXPORT_SYMBOL_GPL(q6voice_stop);
 
+MODULE_AUTHOR("Stephan Gerhold <stephan@gerhold.net>");
 MODULE_DESCRIPTION("Q6Voice driver");
 MODULE_LICENSE("GPL v2");

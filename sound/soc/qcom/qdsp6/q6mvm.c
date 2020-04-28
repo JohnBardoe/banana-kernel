@@ -1,10 +1,50 @@
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+// Copyright (c) 2020, Stephan Gerhold
+
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/soc/qcom/apr.h>
 #include "q6mvm.h"
 #include "q6voice-common.h"
-#include "q6voice-downstream.h"
+
+#define VSS_IMVM_CMD_CREATE_PASSIVE_CONTROL_SESSION	0x000110FF
+
+struct vss_imvm_cmd_create_control_session_cmd {
+	struct apr_hdr hdr;
+
+	/* A variable-sized stream name. */
+	char name[20];
+} __packed;
+
+#define VSS_IMVM_CMD_SET_POLICY_DUAL_CONTROL		0x00011327
+
+/* This command is required to let MVM know who is in control of session. */
+struct vss_imvm_cmd_set_policy_dual_control_cmd {
+	struct apr_hdr hdr;
+
+	/* Set to TRUE to enable modem state machine control */
+	bool enable;
+} __packed;
+
+#define VSS_IMVM_CMD_ATTACH_VOCPROC			0x0001123E
+#define VSS_IMVM_CMD_DETACH_VOCPROC			0x0001123F
+
+/*
+ * Attach/detach a vocproc to the MVM.
+ * The MVM will symmetrically connect/disconnect this vocproc
+ * to/from all the streams currently attached to it.
+ */
+struct vss_imvm_cmd_attach_vocproc_cmd {
+	struct apr_hdr hdr;
+
+	/* Handle of vocproc being attached. */
+	uint16_t handle;
+} __packed;
+
+#define VSS_IMVM_CMD_START_VOICE			0x00011190
+#define VSS_IMVM_CMD_STOP_VOICE				0x00011192
 
 static inline const char *q6mvm_session_name(enum q6voice_path_type path)
 {
@@ -18,19 +58,19 @@ static inline const char *q6mvm_session_name(enum q6voice_path_type path)
 
 static int q6mvm_set_dual_control(struct q6voice_session *mvm)
 {
-	struct mvm_modem_dual_control_session_cmd cmd;
+	struct vss_imvm_cmd_set_policy_dual_control_cmd cmd;
 
 	cmd.hdr.pkt_size = sizeof(cmd);
 	cmd.hdr.opcode = VSS_IMVM_CMD_SET_POLICY_DUAL_CONTROL;
 
-	cmd.voice_ctl.enable_flag = true;
+	cmd.enable = true;
 
 	return q6voice_common_send(mvm, &cmd.hdr);
 }
 
 struct q6voice_session *q6mvm_session_create(enum q6voice_path_type path)
 {
-	struct mvm_create_ctl_session_cmd cmd;
+	struct vss_imvm_cmd_create_control_session_cmd cmd;
 	struct q6voice_session *mvm;
 	const char *session_name;
 	int ret;
@@ -40,8 +80,7 @@ struct q6voice_session *q6mvm_session_create(enum q6voice_path_type path)
 
 	session_name = q6mvm_session_name(path);
 	if (session_name)
-		strlcpy(cmd.mvm_session.name, session_name,
-			sizeof(cmd.mvm_session.name));
+		strlcpy(cmd.name, session_name, sizeof(cmd.name));
 
 	mvm = q6voice_session_create(Q6VOICE_SERVICE_MVM, path, &cmd.hdr);
 	if (IS_ERR(mvm))
@@ -61,12 +100,12 @@ EXPORT_SYMBOL_GPL(q6mvm_session_create);
 int q6mvm_attach(struct q6voice_session *mvm, struct q6voice_session *cvp,
 		 bool state)
 {
-	struct mvm_attach_vocproc_cmd cmd;
+	struct vss_imvm_cmd_attach_vocproc_cmd cmd;
 
 	cmd.hdr.pkt_size = sizeof(cmd);
 	cmd.hdr.opcode = state ? VSS_IMVM_CMD_ATTACH_VOCPROC : VSS_IMVM_CMD_DETACH_VOCPROC;
 
-	cmd.mvm_attach_cvp_handle.handle = cvp->handle;
+	cmd.handle = cvp->handle;
 
 	return q6voice_common_send(mvm, &cmd.hdr);
 }

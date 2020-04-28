@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+// Copyright (c) 2020, Stephan Gerhold
+
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <sound/soc.h>
@@ -127,5 +131,6 @@ static struct platform_driver q6voice_dai_platform_driver = {
 };
 module_platform_driver(q6voice_dai_platform_driver);
 
-MODULE_DESCRIPTION("Q6Voice dai driver");
+MODULE_AUTHOR("Stephan Gerhold <stephan@gerhold.net>");
+MODULE_DESCRIPTION("Q6Voice DAI driver");
 MODULE_LICENSE("GPL v2");

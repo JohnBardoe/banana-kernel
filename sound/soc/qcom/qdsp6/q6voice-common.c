@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (c) 2020, Stephan Gerhold
+
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
@@ -263,5 +266,6 @@ int q6voice_common_send(struct q6voice_session *s, struct apr_hdr *hdr)
 }
 EXPORT_SYMBOL_GPL(q6voice_common_send);
 
+MODULE_AUTHOR("Stephan Gerhold <stephan@gerhold.net>");
 MODULE_DESCRIPTION("Q6Voice common session management");
 MODULE_LICENSE("GPL v2");
