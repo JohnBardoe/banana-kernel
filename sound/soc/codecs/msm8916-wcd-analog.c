@@ -825,8 +825,8 @@ static const struct snd_soc_dapm_route pm8916_wcd_analog_audio_map[] = {
 	{"EAR PA", NULL, "EAR CP"},
 
 	/* Headset (RX MIX1 and RX MIX2) */
-	{"HEADPHONE", NULL, "HPHL PA"},
-	{"HEADPHONE", NULL, "HPHR PA"},
+	{"HPHL_OUT", NULL, "HPHL PA"},
+	{"HPHR_OUT", NULL, "HPHR PA"},
 
 	{"HPHL DAC", NULL, "EAR_HPHL_CLK"},
 	{"HPHR DAC", NULL, "EAR_HPHR_CLK"},
@@ -873,7 +873,8 @@ static const struct snd_soc_dapm_widget pm8916_wcd_analog_dapm_widgets[] = {
 	SND_SOC_DAPM_INPUT("AMIC3"),
 	SND_SOC_DAPM_INPUT("AMIC2"),
 	SND_SOC_DAPM_OUTPUT("EAR"),
-	SND_SOC_DAPM_OUTPUT("HEADPHONE"),
+	SND_SOC_DAPM_OUTPUT("HPHL_OUT"),
+	SND_SOC_DAPM_OUTPUT("HPHR_OUT"),
 
 	/* RX stuff */
 	SND_SOC_DAPM_SUPPLY("INT_LDO_H", SND_SOC_NOPM, 1, 0, NULL, 0),
