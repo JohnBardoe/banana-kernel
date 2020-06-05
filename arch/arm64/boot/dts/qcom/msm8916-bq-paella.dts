@@ -10,6 +10,7 @@
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/leds/common.h>
 #include <dt-bindings/pinctrl/qcom,pmic-mpp.h>
+#include <dt-bindings/sound/apq8016-lpass.h>
 
 / {
 	model = "BQ Aquaris X5";
@@ -54,6 +55,47 @@
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&blsp1_uart2_default>;
 			pinctrl-1 = <&blsp1_uart2_sleep>;
+		};
+
+		lpass@7708000 {
+			status = "okay";
+		};
+
+		sound {
+			compatible = "qcom,apq8016-sbc-sndcard";
+			reg = <0x07702000 0x4>, <0x07702004 0x4>;
+			reg-names = "mic-iomux", "spkr-iomux";
+
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&cdc_pdm_lines_act>;
+			pinctrl-1 = <&cdc_pdm_lines_sus>;
+
+			qcom,model = "bq-paella";
+			qcom,audio-routing =
+				"AW8738 Amp Speaker Playback", "HPHR PA",
+				"AMIC1", "MIC BIAS External1",
+				"AMIC2", "MIC BIAS Internal2",
+				"AMIC3", "MIC BIAS External1";
+
+			internal-codec-playback-dai-link@0 {
+				link-name = "WCD";
+				cpu {
+					sound-dai = <&lpass MI2S_PRIMARY>;
+				};
+				codec {
+					sound-dai = <&lpass_codec 0>, <&wcd_codec 0>, <&speaker_codec>;
+				};
+			};
+
+			internal-codec-capture-dai-link@0 {
+				link-name = "WCD-Capture";
+				cpu {
+					sound-dai = <&lpass MI2S_TERTIARY>;
+				};
+				codec {
+					sound-dai = <&lpass_codec 1>, <&wcd_codec 1>;
+				};
+			};
 		};
 
 		usb@78d9000 {
@@ -114,6 +156,19 @@
 		brightness-levels = <0 255>;
 		num-interpolated-steps = <255>;
 		default-brightness-level = <255>;
+	};
+
+	speaker_codec: audio-codec {
+		compatible = "awinic,aw8738";
+
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&spk_ext_pa_active>;
+		pinctrl-1 = <&spk_ext_pa_suspend>;
+
+		enable-gpios = <&msmgpio 114 GPIO_ACTIVE_HIGH>;
+		aw8738,enable-sequence = <5>;
+		sound-name-prefix = "AW8738 Amp";
+		#sound-dai-cells = <0>;
 	};
 
 	gpio-keys {
@@ -433,6 +488,30 @@
 				drive-strength = <2>;
 				bias-pull-down;
 			};
+		};
+	};
+
+	spk_ext_pa_active: spk_ext_pa_active {
+		pinmux {
+			function = "gpio";
+			pins = "gpio114";
+		};
+		pinconf {
+			pins = "gpio114";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+	};
+
+	spk_ext_pa_suspend: spk_ext_pa_suspend {
+		pinmux {
+			function = "gpio";
+			pins = "gpio114";
+		};
+		pinconf {
+			pins = "gpio114";
+			drive-strength = <2>;
+			bias-disable;
 		};
 	};
 
