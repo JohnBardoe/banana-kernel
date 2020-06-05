@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* 
+/*
  * aw8738.c -- AW8738 ALSA SoC Codec driver
  */
 
@@ -19,9 +19,6 @@
 #include <sound/soc-dai.h>
 #include <sound/soc-dapm.h>
 
-static const struct snd_kcontrol_new spkr_switch = 
-	SOC_DAPM_SINGLE_VIRT("Switch", 1);
-
 struct aw8738_priv {
 	struct gpio_desc *enable_gpio;
 	unsigned int sequence;
@@ -37,15 +34,18 @@ static int aw8738_spkmode_event(struct snd_soc_dapm_widget *w,
 	if (!aw8738->enable_gpio)
 		return 0;
 
-	if (event & SND_SOC_DAPM_POST_PMU)
+	if (event & SND_SOC_DAPM_POST_PMU) {
+		dev_err(comp->dev, "enable\n");
 		for (i = 0; i < aw8738->sequence; i++){
 			gpiod_set_value_cansleep(aw8738->enable_gpio, 0);
 			udelay(2);
 			gpiod_set_value_cansleep(aw8738->enable_gpio, 1);
 			udelay(2);
 		}
-	else if (event & SND_SOC_DAPM_PRE_PMD)
+	} else if (event & SND_SOC_DAPM_PRE_PMD) {
+		dev_err(comp->dev, "disable\n");
 		gpiod_set_value_cansleep(aw8738->enable_gpio, 0);
+	}
 
 	udelay(300);
 	return 0;
@@ -53,8 +53,6 @@ static int aw8738_spkmode_event(struct snd_soc_dapm_widget *w,
 
 static const struct snd_soc_dapm_widget aw8738_dapm_widgets[] = {
 	SND_SOC_DAPM_INPUT("SIN"),
-	SND_SOC_DAPM_SWITCH("Speaker Playback", SND_SOC_NOPM, 0, 0,
-			    &spkr_switch),
 	SND_SOC_DAPM_OUT_DRV_E("DRV", SND_SOC_NOPM, 0, 0, NULL, 0,
 			       aw8738_spkmode_event,
 			       SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_PRE_PMD),
@@ -62,8 +60,7 @@ static const struct snd_soc_dapm_widget aw8738_dapm_widgets[] = {
 };
 
 static const struct snd_soc_dapm_route aw8738_dapm_routes[] = {
-	{ "Speaker Playback", "Switch", "SIN" },
-	{ "DRV", NULL, "Speaker Playback" },
+	{ "DRV", NULL, "SIN" },
 	{ "SOUT", NULL, "DRV" },
 };
 
@@ -72,13 +69,6 @@ static const struct snd_soc_component_driver aw8738_component_driver = {
 	.num_dapm_widgets = ARRAY_SIZE(aw8738_dapm_widgets),
 	.dapm_routes = aw8738_dapm_routes,
 	.num_dapm_routes = ARRAY_SIZE(aw8738_dapm_routes),
-};
-
-static struct snd_soc_dai_driver aw8738_dai_driver = {
-	.name = "HiFi",
-	.playback = {
-		.stream_name = "PDM Playback",
-	},
 };
 
 static int aw8738_platform_probe(struct platform_device *pdev)
@@ -106,7 +96,7 @@ static int aw8738_platform_probe(struct platform_device *pdev)
 
 	return devm_snd_soc_register_component(&pdev->dev,
 					       &aw8738_component_driver,
-					       &aw8738_dai_driver, 1);
+					       NULL, 0);
 }
 
 #ifdef CONFIG_OF

@@ -72,10 +72,11 @@
 
 			qcom,model = "bq-paella";
 			qcom,audio-routing =
-				"AW8738 Amp Speaker Playback", "HPHR PA",
+				"AW8738 Amp SIN", "HPHR Ext PA",
 				"AMIC1", "MIC BIAS External1",
 				"AMIC2", "MIC BIAS Internal2",
 				"AMIC3", "MIC BIAS External1";
+			qcom,aux-devs = <&speaker_amp>;
 
 			internal-codec-playback-dai-link@0 {
 				link-name = "WCD";
@@ -83,7 +84,7 @@
 					sound-dai = <&lpass MI2S_PRIMARY>;
 				};
 				codec {
-					sound-dai = <&lpass_codec 0>, <&wcd_codec 0>, <&speaker_codec>;
+					sound-dai = <&lpass_codec 0>, <&wcd_codec 0>;
 				};
 			};
 
@@ -158,7 +159,7 @@
 		default-brightness-level = <255>;
 	};
 
-	speaker_codec: audio-codec {
+	speaker_amp: audio-amplifier {
 		compatible = "awinic,aw8738";
 
 		pinctrl-names = "default", "sleep";
@@ -168,7 +169,6 @@
 		enable-gpios = <&msmgpio 114 GPIO_ACTIVE_HIGH>;
 		aw8738,enable-sequence = <5>;
 		sound-name-prefix = "AW8738 Amp";
-		#sound-dai-cells = <0>;
 	};
 
 	gpio-keys {
