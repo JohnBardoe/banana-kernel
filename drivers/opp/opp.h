@@ -188,6 +188,7 @@ struct opp_table {
 	struct device **genpd_virt_devs;
 	struct opp_table **required_opp_tables;
 	unsigned int required_opp_count;
+	bool genpd_virt_enabled;
 
 	unsigned int *supported_hw;
 	unsigned int supported_hw_count;

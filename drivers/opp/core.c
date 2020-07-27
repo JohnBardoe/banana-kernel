@@ -17,6 +17,7 @@
 #include <linux/device.h>
 #include <linux/export.h>
 #include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 
 #include "opp.h"
@@ -796,6 +797,26 @@ static int _set_required_opp(struct device *dev, struct device *pd_dev,
 	return ret;
 }
 
+static int _enable_required_opp(struct device *dev, struct device *pd_dev,
+				bool on)
+{
+	int ret;
+
+	if (on) {
+		ret = pm_runtime_get_sync(pd_dev);
+		if (ret < 0) {
+			pm_runtime_put_noidle(pd_dev);
+			dev_err(dev, "Failed to enable %s: %d\n",
+				dev_name(pd_dev), ret);
+			return ret;
+		}
+	} else {
+		pm_runtime_put(pd_dev);
+	}
+
+	return 0;
+}
+
 /* This is only called for PM domain for now */
 static int _set_required_opps(struct device *dev,
 			      struct opp_table *opp_table,
@@ -803,6 +824,8 @@ static int _set_required_opps(struct device *dev,
 {
 	struct opp_table **required_opp_tables = opp_table->required_opp_tables;
 	struct device **genpd_virt_devs = opp_table->genpd_virt_devs;
+	bool power_on = opp != NULL;
+	bool already_enabled = power_on == opp_table->genpd_virt_enabled;
 	struct device *pd_dev;
 	int i, ret = 0;
 
@@ -829,6 +852,20 @@ static int _set_required_opps(struct device *dev,
 			ret = _set_required_opp(dev, pd_dev, opp, i);
 			if (ret)
 				break;
+
+			if (likely(already_enabled))
+				continue;
+
+			ret = _enable_required_opp(dev, pd_dev, power_on);
+			if (ret)
+				break;
+		}
+
+		if (ret && !already_enabled) {
+			/* Rollback (skip current since it failed) */
+			for (i--; i >= 0; i--)
+				_enable_required_opp(dev, genpd_virt_devs[i],
+						     !power_on);
 		}
 	} else {
 		/* Scaling down? Set required OPPs in reverse order */
@@ -838,8 +875,26 @@ static int _set_required_opps(struct device *dev,
 			ret = _set_required_opp(dev, pd_dev, opp, i);
 			if (ret)
 				break;
+
+			if (likely(already_enabled))
+				continue;
+
+			ret = _enable_required_opp(dev, pd_dev, power_on);
+			if (ret)
+				break;
+		}
+
+		if (ret && !already_enabled) {
+			/* Rollback (skip current since it failed) */
+			for (i++; i < opp_table->required_opp_count; i++)
+				_enable_required_opp(dev, genpd_virt_devs[i],
+						     !power_on);
 		}
 	}
+
+	if (ret == 0 && !already_enabled)
+		opp_table->genpd_virt_enabled = power_on;
+
 	mutex_unlock(&opp_table->genpd_virt_dev_lock);
 
 	return ret;
