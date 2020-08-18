@@ -27,7 +27,7 @@
 #define QCOM_RPM_SCALING_ENABLE_ID			0x2
 
 #define __DEFINE_CLK_SMD_RPM(_platform, _name, _active, type, r_id, stat_id,  \
-			     key)					      \
+			     key, _flags)				      \
 	static struct clk_smd_rpm _platform##_##_active;		      \
 	static struct clk_smd_rpm _platform##_##_name = {		      \
 		.rpm_res_type = (type),					      \
@@ -41,6 +41,7 @@
 			.name = #_name,					      \
 			.parent_names = (const char *[]){ "xo_board" },       \
 			.num_parents = 1,				      \
+			.flags = (_flags),				      \
 		},							      \
 	};								      \
 	static struct clk_smd_rpm _platform##_##_active = {		      \
@@ -56,6 +57,7 @@
 			.name = #_active,				      \
 			.parent_names = (const char *[]){ "xo_board" },	      \
 			.num_parents = 1,				      \
+			.flags = (_flags),				      \
 		},							      \
 	}
 
@@ -94,9 +96,17 @@
 		},							      \
 	}
 
+/*
+ * Some of the clocks defined with DEFINE_CLK_SMD_RPM() are used to scale
+ * interconnects. If the interconnect driver is missing/disabled we don't want
+ * to disable these even when unused, because otherwise the system will hang.
+ *
+ * Eventually CLK_IGNORE_UNUSED could be removed for some of the other clocks
+ * after further validation.
+ */
 #define DEFINE_CLK_SMD_RPM(_platform, _name, _active, type, r_id)	      \
 		__DEFINE_CLK_SMD_RPM(_platform, _name, _active, type, r_id,   \
-		0, QCOM_RPM_SMD_KEY_RATE)
+		0, QCOM_RPM_SMD_KEY_RATE, CLK_IGNORE_UNUSED)
 
 #define DEFINE_CLK_SMD_RPM_BRANCH(_platform, _name, _active, type, r_id, r)   \
 		__DEFINE_CLK_SMD_RPM_BRANCH(_platform, _name, _active, type,  \
@@ -104,7 +114,7 @@
 
 #define DEFINE_CLK_SMD_RPM_QDSS(_platform, _name, _active, type, r_id)	      \
 		__DEFINE_CLK_SMD_RPM(_platform, _name, _active, type, r_id,   \
-		0, QCOM_RPM_SMD_KEY_STATE)
+		0, QCOM_RPM_SMD_KEY_STATE, 0)
 
 #define DEFINE_CLK_SMD_RPM_XO_BUFFER(_platform, _name, _active, r_id)	      \
 		__DEFINE_CLK_SMD_RPM_BRANCH(_platform, _name, _active,	      \
