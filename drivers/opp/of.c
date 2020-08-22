@@ -431,25 +431,12 @@ err:
 }
 EXPORT_SYMBOL_GPL(dev_pm_opp_of_find_icc_paths);
 
-static bool _opp_is_supported(struct device *dev, struct opp_table *opp_table,
-			      struct device_node *np)
+static bool _opp_match_hw(struct device *dev, struct opp_table *opp_table,
+			  struct device_node *np)
 {
 	unsigned int count = opp_table->supported_hw_count;
 	u32 version;
 	int ret;
-
-	if (!opp_table->supported_hw) {
-		/*
-		 * In the case that no supported_hw has been set by the
-		 * platform but there is an opp-supported-hw value set for
-		 * an OPP then the OPP should not be enabled as there is
-		 * no way to see if the hardware supports it.
-		 */
-		if (of_find_property(np, "opp-supported-hw", NULL))
-			return false;
-		else
-			return true;
-	}
 
 	while (count--) {
 		ret = of_property_read_u32_index(np, "opp-supported-hw", count,
@@ -466,6 +453,25 @@ static bool _opp_is_supported(struct device *dev, struct opp_table *opp_table,
 	}
 
 	return true;
+}
+
+static bool _opp_is_supported(struct device *dev, struct opp_table *opp_table,
+			      struct device_node *np)
+{
+	if (!opp_table->supported_hw) {
+		/*
+		 * In the case that no supported_hw has been set by the
+		 * platform but there is an opp-supported-hw value set for
+		 * an OPP then the OPP should not be enabled as there is
+		 * no way to see if the hardware supports it.
+		 */
+		if (of_find_property(np, "opp-supported-hw", NULL))
+			return false;
+		else
+			return true;
+	}
+
+	return _opp_match_hw(dev, opp_table, np);
 }
 
 static int opp_parse_supplies(struct dev_pm_opp *opp, struct device *dev,
