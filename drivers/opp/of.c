@@ -432,15 +432,15 @@ err:
 EXPORT_SYMBOL_GPL(dev_pm_opp_of_find_icc_paths);
 
 static bool _opp_match_hw(struct device *dev, struct opp_table *opp_table,
-			  struct device_node *np)
+			  struct device_node *np, u32 offset)
 {
 	unsigned int count = opp_table->supported_hw_count;
 	u32 version;
 	int ret;
 
 	while (count--) {
-		ret = of_property_read_u32_index(np, "opp-supported-hw", count,
-						 &version);
+		ret = of_property_read_u32_index(np, "opp-supported-hw",
+						 offset + count, &version);
 		if (ret) {
 			dev_warn(dev, "%s: failed to read opp-supported-hw property at index %d: %d\n",
 				 __func__, count, ret);
@@ -458,6 +458,8 @@ static bool _opp_match_hw(struct device *dev, struct opp_table *opp_table,
 static bool _opp_is_supported(struct device *dev, struct opp_table *opp_table,
 			      struct device_node *np)
 {
+	int count, i;
+
 	if (!opp_table->supported_hw) {
 		/*
 		 * In the case that no supported_hw has been set by the
@@ -471,7 +473,27 @@ static bool _opp_is_supported(struct device *dev, struct opp_table *opp_table,
 			return true;
 	}
 
-	return _opp_match_hw(dev, opp_table, np);
+	count = of_property_count_u32_elems(np, "opp-supported-hw");
+	if (count < 0) {
+		dev_err(dev, "%s: failed to count opp-supported-hw property: %d\n",
+			__func__, count);
+		return false;
+	}
+
+	count /= opp_table->supported_hw_count;
+	if (count == 0) {
+		dev_warn(dev, "%s: invalid opp-supported-hw property: expected at least %d masks\n",
+			 __func__, opp_table->supported_hw_count);
+		return false;
+	}
+
+	/* At least one of the specified supported version masks should match */
+	for (i = 0; i < count; i++) {
+		if (_opp_match_hw(dev, opp_table, np, i * opp_table->supported_hw_count))
+			return true;
+	}
+
+	return false;
 }
 
 static int opp_parse_supplies(struct dev_pm_opp *opp, struct device *dev,
