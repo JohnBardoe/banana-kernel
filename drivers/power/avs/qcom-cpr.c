@@ -4,6 +4,7 @@
  * Copyright (c) 2019, Linaro Limited
  */
 
+#define DEBUG
 #include <linux/module.h>
 #include <linux/err.h>
 #include <linux/debugfs.h>
@@ -470,7 +471,7 @@ static int cpr_scale(struct cpr_drv *drv, enum voltage_change_dir dir)
 	if (dir != UP && dir != DOWN)
 		return 0;
 
-	step_uV = 12500;//regulator_get_linear_step(drv->vdd_apc);
+	step_uV = regulator_get_linear_step(drv->vdd_apc);
 	if (!step_uV)
 		return -EINVAL;
 
@@ -911,7 +912,7 @@ static int cpr_fuse_corner_init(struct cpr_drv *drv)
 			accs = acc_desc->override_settings;
 	}
 
-	step_volt = 12500;//regulator_get_linear_step(drv->vdd_apc);
+	step_volt = regulator_get_linear_step(drv->vdd_apc);
 	if (!step_volt)
 		return -EINVAL;
 
@@ -1096,7 +1097,8 @@ static unsigned long cpr_get_opp_hz_for_req(struct dev_pm_opp *ref,
 	struct device_node *ref_np;
 	struct device_node *desc_np;
 	struct device_node *child_np = NULL;
-	struct device_node *child_req_np = NULL;
+	struct of_phandle_iterator it;
+	int err;
 
 	desc_np = dev_pm_opp_of_get_opp_desc_node(cpu_dev);
 	if (!desc_np)
@@ -1106,17 +1108,18 @@ static unsigned long cpr_get_opp_hz_for_req(struct dev_pm_opp *ref,
 	if (!ref_np)
 		goto out_ref;
 
-	do {
-		of_node_put(child_req_np);
-		child_np = of_get_next_available_child(desc_np, child_np);
-		child_req_np = of_parse_phandle(child_np, "required-opps", 0);
-	} while (child_np && child_req_np != ref_np);
+	for_each_available_child_of_node(desc_np, child_np) {
+		of_for_each_phandle(&it, err, child_np, "required-opps", NULL, 0) {
+			if (it.node == ref_np) {
+				of_property_read_u64(child_np, "opp-hz", &rate);
+				of_node_put(it.node);
+				of_node_put(child_np);
+				goto done;
+			}
+		}
+	}
 
-	if (child_np && child_req_np == ref_np)
-		of_property_read_u64(child_np, "opp-hz", &rate);
-
-	of_node_put(child_req_np);
-	of_node_put(child_np);
+done:
 	of_node_put(ref_np);
 out_ref:
 	of_node_put(desc_np);
@@ -1136,9 +1139,8 @@ static int cpr_corner_init(struct cpr_drv *drv)
 	struct corner_data *cdata;
 	const struct fuse_corner_data *fdata;
 	bool apply_scaling;
-	unsigned long freq_diff, freq_diff_mhz;
-	unsigned long freq;
-	int step_volt = 12500;//regulator_get_linear_step(drv->vdd_apc);
+	unsigned long freq, freq_diff_mhz;
+	int step_volt = regulator_get_linear_step(drv->vdd_apc);
 	struct dev_pm_opp *opp;
 
 	if (!step_volt)
@@ -1249,8 +1251,8 @@ static int cpr_corner_init(struct cpr_drv *drv)
 		}
 
 		if (apply_scaling) {
-			freq_diff = fuse->max_freq - corner->freq;
-			freq_diff_mhz = freq_diff / 1000000;
+			freq_diff_mhz = (fuse->max_freq / 1000000) -
+					(corner->freq  / 1000000);
 			corner->quot_adjust = scaling * freq_diff_mhz / 1000;
 
 			corner->uV = cpr_interpolate(corner, step_volt, fdata);
@@ -1267,9 +1269,9 @@ static int cpr_corner_init(struct cpr_drv *drv)
 		else if (desc->reduce_to_fuse_uV && fuse->uV < corner->max_uV)
 			corner->max_uV = max(corner->min_uV, fuse->uV);
 
-		dev_dbg(drv->dev, "corner %d: [%d %d %d] quot %d\n", i,
-			corner->min_uV, corner->uV, corner->max_uV,
-			fuse->quot - corner->quot_adjust);
+		dev_dbg(drv->dev, "corner %d: [%d %d %d] quot %d (adjust: %d)\n",
+			i, corner->min_uV, corner->uV, corner->max_uV,
+			fuse->quot - corner->quot_adjust, corner->quot_adjust);
 	}
 
 	return 0;
@@ -1306,11 +1308,13 @@ static const struct cpr_fuse *cpr_get_fuses(struct cpr_drv *drv)
 		if (!fuses[i].quotient)
 			return ERR_PTR(-ENOMEM);
 
+#if 0
 		snprintf(tbuf, 32, "cpr_quotient_offset%d", i + 1);
 		fuses[i].quotient_offset = devm_kstrdup(drv->dev, tbuf,
 							GFP_KERNEL);
 		if (!fuses[i].quotient_offset)
 			return ERR_PTR(-ENOMEM);
+#endif
 	}
 
 	return fuses;
@@ -1417,39 +1421,30 @@ static const struct cpr_desc msm8916_cpr_desc = {
 				.ref_uV = 1050000,
 				.max_uV = 1050000,
 				.min_uV = 1050000,
-				.max_volt_scale = 0,
 				.max_quot_scale = 0,
 				.quot_offset = 0,
 				.quot_scale = 1,
 				.quot_adjust = 0,
-				.quot_offset_scale = 1,
-				.quot_offset_adjust = 0,
 			},
 			/* fuse corner 1 */
 			{
 				.ref_uV = 1150000,
 				.max_uV = 1150000,
 				.min_uV = 1050000,
-				.max_volt_scale = 0,
 				.max_quot_scale = 0,
 				.quot_offset = 0,
 				.quot_scale = 1,
 				.quot_adjust = 0,
-				.quot_offset_scale = 1,
-				.quot_offset_adjust = 0,
 			},
 			/* fuse corner 2 */
 			{
 				.ref_uV = 1350000,
 				.max_uV = 1350000,
 				.min_uV = 1162500,
-				.max_volt_scale = 0,
 				.max_quot_scale = 650,
 				.quot_offset = 0,
 				.quot_scale = 1,
 				.quot_adjust = 0,
-				.quot_offset_scale = 1,
-				.quot_offset_adjust = 0,
 			},
 		},
 	},
@@ -1792,6 +1787,8 @@ static int cpr_probe(struct platform_device *pdev)
 	if (IS_ERR(drv->vdd_apc))
 		return PTR_ERR(drv->vdd_apc);
 
+	dev_err(dev, "Step volt: %d\n", regulator_get_linear_step(drv->vdd_apc));
+
 	/*
 	 * Initialize fuse corners, since it simply depends
 	 * on data in efuses.
@@ -1800,7 +1797,7 @@ static int cpr_probe(struct platform_device *pdev)
 	 * since it depends on the CPU's OPP table.
 	 */
 	ret = cpr_read_efuse(dev, "cpr_fuse_revision", &cpr_rev);
-	if (ret)
+	if (ret && ret != -ENOENT)
 		return ret;
 
 	drv->cpr_fuses = cpr_get_fuses(drv);
@@ -1829,8 +1826,10 @@ static int cpr_probe(struct platform_device *pdev)
 	if (!drv->pd.name)
 		return -EINVAL;
 
+#if 0
 	drv->pd.power_off = cpr_power_off;
 	drv->pd.power_on = cpr_power_on;
+#endif
 	drv->pd.set_performance_state = cpr_set_performance_state;
 	drv->pd.opp_to_performance_state = cpr_get_performance_state;
 	drv->pd.attach_dev = cpr_pd_attach_dev;

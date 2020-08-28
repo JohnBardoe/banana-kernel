@@ -255,7 +255,7 @@ static const struct qcom_cpufreq_match_data match_data_krait = {
 static const char *msm8916_genpd_names[] = { "mx", "cpr", NULL };
 
 static const struct qcom_cpufreq_match_data match_data_msm8916 = {
-	// TODO: .get_version = qcom_cpufreq_msm8916_name_version
+	// TODO: .get_version = qcom_cpufreq_msm8916_name_version,
 	.genpd_names = msm8916_genpd_names,
 };
 

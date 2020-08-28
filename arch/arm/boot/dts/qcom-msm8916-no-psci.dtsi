@@ -9,8 +9,8 @@
 
 			/* TODO: power domain support */
 			cpu-idle-states = <&CPU_SLEEP_0>;
-			/delete-property/ power-domains;
-			/delete-property/ power-domain-names;
+			power-domains = <&rpmpd MSM8916_VDDMX_AO>, <&cpr>;
+			power-domain-names = "mx", "cpr";
 		};
 		cpu@1 {
 			enable-method = "qcom,arm-cortex-acc";
@@ -19,8 +19,8 @@
 
 			/* TODO: power domain support */
 			cpu-idle-states = <&CPU_SLEEP_0>;
-			/delete-property/ power-domains;
-			/delete-property/ power-domain-names;
+			power-domains = <&rpmpd MSM8916_VDDMX_AO>, <&cpr>;
+			power-domain-names = "mx", "cpr";
 		};
 		cpu@2 {
 			enable-method = "qcom,arm-cortex-acc";
@@ -29,8 +29,8 @@
 
 			/* TODO: power domain support */
 			cpu-idle-states = <&CPU_SLEEP_0>;
-			/delete-property/ power-domains;
-			/delete-property/ power-domain-names;
+			power-domains = <&rpmpd MSM8916_VDDMX_AO>, <&cpr>;
+			power-domain-names = "mx", "cpr";
 		};
 		cpu@3 {
 			enable-method = "qcom,arm-cortex-acc";
@@ -39,8 +39,8 @@
 
 			/* TODO: power domain support */
 			cpu-idle-states = <&CPU_SLEEP_0>;
-			/delete-property/ power-domains;
-			/delete-property/ power-domain-names;
+			power-domains = <&rpmpd MSM8916_VDDMX_AO>, <&cpr>;
+			power-domain-names = "mx", "cpr";
 		};
 
 		l2-cache {
