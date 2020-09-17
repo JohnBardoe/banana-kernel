@@ -1,32 +1,56 @@
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
+#include <linux/etherdevice.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/netdevice.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/soc/qcom/smem_state.h>
 
-#define BAM_DMUX_AUTOSUSPEND_DELAY	1000
-#define BAM_DMUX_UL_WAKEUP_TIMEOUT	msecs_to_jiffies(2000)
 #define BAM_DMUX_BUFFER_SIZE		SZ_2K
 #define BAM_DMUX_NUM_DESC		32
 
-struct bam_mux_hdr {
-	uint16_t magic_num;
-	uint8_t signal;
-	uint8_t cmd;
-	uint8_t pad_len;
-	uint8_t ch_id;
-	uint16_t pkt_len;
+#define BAM_DMUX_AUTOSUSPEND_DELAY	1000
+#define BAM_DMUX_UL_WAKEUP_TIMEOUT	msecs_to_jiffies(2000)
+
+#define BAM_DMUX_HDR_MAGIC		0x33fc
+
+enum {
+	BAM_DMUX_HDR_CMD_DATA,
+	BAM_DMUX_HDR_CMD_OPEN,
+	BAM_DMUX_HDR_CMD_CLOSE,
+};
+
+enum {
+	BAM_DMUX_CH_DATA_RMNET_0,
+	BAM_DMUX_CH_DATA_RMNET_1,
+	BAM_DMUX_CH_DATA_RMNET_2,
+	BAM_DMUX_CH_DATA_RMNET_3,
+	BAM_DMUX_CH_DATA_RMNET_4,
+	BAM_DMUX_CH_DATA_RMNET_5,
+	BAM_DMUX_CH_DATA_RMNET_6,
+	BAM_DMUX_CH_DATA_RMNET_7,
+	BAM_DMUX_CH_USB_RMNET_0,
+	BAM_DMUX_NUM_CH
+};
+
+struct bam_dmux_hdr {
+	u16 magic;	/* = BAM_DMUX_HDR_MAGIC */
+	u8 signal;
+	u8 cmd;
+	u8 pad;		/* 0...3: len should be word-aligned */
+	u8 ch;
+	u16 len;
 };
 
 struct bam_dmux_dma_desc {
 	struct bam_dmux *dmux;
 	dma_addr_t dma_addr;
-	struct bam_mux_hdr *hdr;
+	struct bam_dmux_hdr *hdr;
 	struct dma_async_tx_descriptor *dma;
 };
 
@@ -40,6 +64,13 @@ struct bam_dmux {
 
 	struct dma_chan *rx, *tx;
 	struct bam_dmux_dma_desc rx_desc[BAM_DMUX_NUM_DESC];
+
+	struct net_device *netdevs[BAM_DMUX_NUM_CH];
+};
+
+struct bam_dmux_netdev {
+	struct bam_dmux *dmux;
+	u8 ch;
 };
 
 static void bam_dmux_pc_vote(struct bam_dmux *dmux, bool enable)
@@ -56,13 +87,133 @@ static void bam_dmux_pc_ack(struct bam_dmux *dmux)
 	dmux->pc_ack_state = !dmux->pc_ack_state;
 }
 
+static int bam_dmux_netdev_open(struct net_device *dev)
+{
+	netdev_err(dev, "open\n");
+	return 0;
+}
+
+static int bam_dmux_netdev_stop(struct net_device *dev)
+{
+	netdev_err(dev, "stop\n");
+	return 0;
+}
+
+static netdev_tx_t bam_dmux_netdev_start_xmit(struct sk_buff *skb, struct net_device *dev)
+{
+	netdev_err(dev, "start_xmit\n");
+	return NETDEV_TX_OK;
+}
+
+static const struct net_device_ops bam_dmux_ops_ether = {
+	.ndo_open		= bam_dmux_netdev_open,
+	.ndo_stop		= bam_dmux_netdev_stop,
+	.ndo_start_xmit		= bam_dmux_netdev_start_xmit,
+	.ndo_set_mac_address	= eth_mac_addr,
+	.ndo_validate_addr	= eth_validate_addr,
+};
+
+static void bam_dmux_netdev_setup(struct net_device *dev)
+{
+	/* Hardcode ethernet mode for now */
+	ether_setup(dev);
+	random_ether_addr(dev->dev_addr);
+	dev->netdev_ops = &bam_dmux_ops_ether;
+
+	dev->needed_headroom = sizeof(struct bam_dmux_hdr);
+	dev->needed_tailroom = sizeof(u32); /* word-aligned */
+	dev->max_mtu = 2000; /* TODO: Dynamic MTU */
+}
+
+static void bam_dmux_cmd_open(struct bam_dmux *dmux, struct bam_dmux_hdr *hdr)
+{
+	struct net_device *netdev = dmux->netdevs[hdr->ch];
+	struct bam_dmux_netdev *bndev;
+	const char *name;
+	int ret;
+
+	if (netdev) {
+		if (netif_device_present(netdev))
+			dev_err(dmux->dev, "Channel already open: %d\n", hdr->ch);
+		else
+			netif_device_attach(netdev);
+		return;
+	}
+
+	name = "rmnet%d";
+	if (hdr->ch == BAM_DMUX_CH_USB_RMNET_0)
+		name = "rmnet_usb%d";
+
+	netdev = alloc_netdev(sizeof(*bndev), name, NET_NAME_ENUM,
+			      bam_dmux_netdev_setup);
+	if (!netdev)
+		return; /* -ENOMEM */
+
+	bndev = netdev_priv(netdev);
+	bndev->dmux = dmux;
+	bndev->ch = hdr->ch;
+
+	ret = register_netdev(netdev);
+	if (ret) {
+		dev_err(dmux->dev, "Failed to register netdev for channel %d: %d\n",
+			hdr->ch, ret);
+		free_netdev(netdev);
+		return;
+	}
+
+	netdev_info(netdev, "open channel %d\n", hdr->ch);
+	dmux->netdevs[hdr->ch] = netdev;
+}
+
+static void bam_dmux_cmd_close(struct bam_dmux *dmux, struct bam_dmux_hdr *hdr)
+{
+	struct net_device *netdev = dmux->netdevs[hdr->ch];
+
+	if (!netdev || netif_device_present(netdev)) {
+		dev_err(dmux->dev, "Channel not open: %d\n", hdr->ch);
+		return;
+	}
+
+	netif_device_detach(netdev);
+}
+
 static void bam_dmux_rx_callback(void *data)
 {
 	struct bam_dmux_dma_desc *desc = data;
-	struct bam_mux_hdr *hdr = desc->hdr;
+	struct bam_dmux *dmux = desc->dmux;
+	struct bam_dmux_hdr *hdr = desc->hdr;
+
+	if (hdr->magic != BAM_DMUX_HDR_MAGIC) {
+		dev_err(dmux->dev, "Invalid magic in header: %#x\n", hdr->magic);
+		goto out;
+	}
+
+	if (hdr->ch >= BAM_DMUX_NUM_CH) {
+		dev_warn(dmux->dev, "Unsupported channel: %d\n", hdr->ch);
+		goto out;
+	}
 
 	dev_err(desc->dmux->dev, "callback: magic: %#x, signal: %#x, cmd: %d, pad: %d, ch: %d, len: %d\n",
-		hdr->magic_num, hdr->signal, hdr->cmd, hdr->pad_len, hdr->ch_id, hdr->pkt_len);
+		hdr->magic, hdr->signal, hdr->cmd, hdr->pad, hdr->ch, hdr->len);
+
+	switch (hdr->cmd) {
+	case BAM_DMUX_HDR_CMD_DATA:
+		/* TODO */
+		break;
+	case BAM_DMUX_HDR_CMD_OPEN:
+		bam_dmux_cmd_open(dmux, hdr);
+		break;
+	case BAM_DMUX_HDR_CMD_CLOSE:
+		bam_dmux_cmd_close(dmux, hdr);
+		break;
+	default:
+		dev_warn(dmux->dev, "Unsupported command %d on channel %d\n",
+			 hdr->cmd, hdr->ch);
+		break;
+	}
+
+out:
+	return;
 }
 
 static bool bam_dmux_power_on(struct bam_dmux *dmux)
