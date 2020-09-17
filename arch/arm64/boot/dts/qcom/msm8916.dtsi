@@ -1281,6 +1281,34 @@
 			#interrupt-cells = <4>;
 		};
 
+		bam_dmux_dma: dma@4044000 {
+			compatible = "qcom,bam-v1.7.0";
+			reg = <0x04044000 0x19000>;
+			interrupts = <GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>;
+			#dma-cells = <1>;
+			qcom,ee = <0>;
+
+			num-channels = <6>;
+			qcom,num-ees = <1>;
+			qcom,remote-power-collapse;
+		};
+
+		/* FIXME: Move out of SoC node I guess */
+		bam_dmux: bam-dmux {
+			compatible = "qcom,bam-dmux";
+
+			interrupts-extended = <&hexagon_smsm 1 IRQ_TYPE_EDGE_BOTH>,
+					      <&hexagon_smsm 11 IRQ_TYPE_EDGE_BOTH>;
+			interrupt-names = "pc", "pc-ack";
+
+			qcom,smem-states = <&apps_smsm 1>, <&apps_smsm 11>;
+			qcom,smem-state-names = "pc", "pc-ack";
+
+			dmas = <&bam_dmux_dma 4>, <&bam_dmux_dma 5>;
+			dma-names = "tx", "rx";
+		};
+
+/*
 		qcom,sps {
 			compatible = "qcom,msm_sps_4k";
 			qcom,device-type = <3>;
@@ -1300,6 +1328,7 @@
 			qcom,smem-states = <&apps_smsm 1>;
 			qcom,smem-state-names = "smsm";
 		};
+*/
 
 		mpss: remoteproc@4080000 {
 			compatible = "qcom,msm8916-mss-pil", "qcom,q6v5-pil";
