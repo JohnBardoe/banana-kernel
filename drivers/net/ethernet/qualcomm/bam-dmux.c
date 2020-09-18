@@ -10,6 +10,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/soc/qcom/smem_state.h>
+#include <linux/spinlock.h>
 #include <linux/workqueue.h>
 
 #define BAM_DMUX_BUFFER_SIZE		SZ_2K
@@ -66,8 +67,10 @@ struct bam_dmux {
 	struct dma_chan *rx, *tx;
 	struct bam_dmux_skb_dma rx_skbs[BAM_DMUX_NUM_SKB];
 	struct bam_dmux_skb_dma tx_skbs[BAM_DMUX_NUM_SKB];
+	spinlock_t tx_lock; /* Protect tx_skbs, next_tx_skb */
+	unsigned int next_tx_skb;
 
-	unsigned open_channels;
+	unsigned int open_channels;
 	struct work_struct register_netdev_work;
 	struct net_device *netdevs[BAM_DMUX_NUM_CH];
 };
@@ -76,12 +79,6 @@ struct bam_dmux_netdev {
 	struct bam_dmux *dmux;
 	u8 ch;
 	bool open;
-};
-
-struct bam_dmux_cmd_dma {
-	struct bam_dmux_hdr pkt;
-	struct bam_dmux *dmux;
-	dma_addr_t addr;
 };
 
 static void bam_dmux_pc_vote(struct bam_dmux *dmux, bool enable)
@@ -98,58 +95,104 @@ static void bam_dmux_pc_ack(struct bam_dmux *dmux)
 	dmux->pc_ack_state = !dmux->pc_ack_state;
 }
 
-static void bam_dmux_tx_cmd_callback(void *data)
+static bool bam_dmux_skb_dma_map(struct bam_dmux_skb_dma *skb_dma,
+				 enum dma_data_direction dir)
 {
-	struct bam_dmux_cmd_dma *dma = data;
-	struct bam_dmux *dmux = dma->dmux;
+	struct device *dev = skb_dma->dmux->dev;
 
-	dev_err(dmux->dev, "cmd callback\n");
-	dma_unmap_single(dmux->dev, dma->addr, sizeof(dma->pkt), DMA_TO_DEVICE);
-	kfree(dma);
+	skb_dma->addr = dma_map_single(dev, skb_dma->skb->data, skb_dma->skb->len, dir);
+	if (dma_mapping_error(dev, skb_dma->addr)) {
+		dev_err(dev, "Failed to DMA map buffer\n");
+		skb_dma->addr = 0;
+		return false;
+	}
 
-	pm_runtime_mark_last_busy(dmux->dev);
-	pm_runtime_put_autosuspend(dmux->dev);
+	return true;
 }
 
-static int bam_dmux_send_cmd(struct bam_dmux *dmux, u8 ch, u8 cmd)
+static void bam_dmux_skb_dma_unmap(struct bam_dmux_skb_dma *skb_dma,
+				   enum dma_data_direction dir)
 {
-	struct bam_dmux_cmd_dma *dma;
+	dma_unmap_single(skb_dma->dmux->dev, skb_dma->addr, skb_dma->skb->len, dir);
+	skb_dma->addr = 0;
+}
+
+static void bam_dmux_tx_callback(void *data)
+{
+	struct bam_dmux_skb_dma *skb_dma = data;
+	struct bam_dmux *dmux = skb_dma->dmux;
+	struct sk_buff *skb = skb_dma->skb;
+
+	dev_err(dmux->dev, "TX callback\n");
+	pm_runtime_mark_last_busy(dmux->dev);
+	pm_runtime_put_autosuspend(dmux->dev);
+
+	bam_dmux_skb_dma_unmap(skb_dma, DMA_TO_DEVICE);
+	skb_dma->skb = NULL;
+	dev_consume_skb_any(skb);
+}
+
+static bool bam_dmux_skb_dma_submit_tx(struct bam_dmux_skb_dma *skb_dma)
+{
+	struct bam_dmux *dmux = skb_dma->dmux;
 	struct dma_async_tx_descriptor *desc;
+
+	desc = dmaengine_prep_slave_single(dmux->tx, skb_dma->addr,
+					   skb_dma->skb->len, DMA_MEM_TO_DEV,
+					   DMA_PREP_INTERRUPT);
+	if (!desc) {
+		dev_err(dmux->dev, "Failed to prepare TX DMA buffer\n");
+		return false;
+	}
+
+	desc->callback = bam_dmux_tx_callback;
+	desc->callback_param = skb_dma;
+	desc->cookie = dmaengine_submit(desc);
+	return true;
+}
+
+static int bam_dmux_send_cmd(struct bam_dmux_netdev *bndev, u8 cmd)
+{
+	struct bam_dmux *dmux = bndev->dmux;
+	struct bam_dmux_skb_dma *skb_dma;
+	struct bam_dmux_hdr *hdr;
+	struct sk_buff *skb;
 	int ret;
 
-	dma = kzalloc(sizeof(*dma), GFP_KERNEL);
-	if (!dma)
+	skb = alloc_skb(sizeof(*hdr), GFP_KERNEL);
+	if (!skb)
 		return -ENOMEM;
+	hdr = skb_put(skb, sizeof(*hdr));
 
-	dma->dmux = dmux;
-	dma->pkt.magic = BAM_DMUX_HDR_MAGIC;
-	dma->pkt.cmd = cmd;
-	dma->pkt.ch = ch;
+	memset(hdr, 0, sizeof(*hdr));
+	hdr->magic = BAM_DMUX_HDR_MAGIC;
+	hdr->cmd = cmd;
+	hdr->ch = bndev->ch;
 
 	ret = pm_runtime_get_sync(dmux->dev);
 	if (ret < 0) {
 		pm_runtime_put_noidle(dmux->dev);
-		kfree(dma);
+		dev_kfree_skb(skb);
 		return ret;
 	}
 
-	dma->addr = dma_map_single(dmux->dev, &dma->pkt, sizeof(dma->pkt),
-				   DMA_TO_DEVICE);
-	ret = dma_mapping_error(dmux->dev, dma->addr);
-	if (ret)
-		goto err;
-
-	desc = dmaengine_prep_slave_single(dmux->tx, dma->addr, sizeof(dma->pkt),
-					   DMA_MEM_TO_DEV, DMA_PREP_INTERRUPT);
-	if (!desc) {
-		dev_err(dmux->dev, "Failed to prepare TX channel\n");
-		ret = -EIO;
+	skb_dma = &dmux->tx_skbs[dmux->next_tx_skb++ % BAM_DMUX_NUM_SKB];
+	if (skb_dma->skb) {
+		// ???
+		ret = -EBUSY;
 		goto err;
 	}
 
-	desc->callback = bam_dmux_tx_cmd_callback;
-	desc->callback_param = dma;
-	desc->cookie = dmaengine_submit(desc);
+	skb_dma->skb = skb;
+	if (!bam_dmux_skb_dma_map(skb_dma, DMA_TO_DEVICE)) {
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	if (!bam_dmux_skb_dma_submit_tx(skb_dma)) {
+		ret = -EIO;
+		goto err;
+	}
 
 	dma_async_issue_pending(dmux->tx);
 	return 0;
@@ -157,7 +200,7 @@ static int bam_dmux_send_cmd(struct bam_dmux *dmux, u8 ch, u8 cmd)
 err:
 	pm_runtime_mark_last_busy(dmux->dev);
 	pm_runtime_put_autosuspend(dmux->dev);
-	kfree(dma);
+	dev_kfree_skb(skb);
 	return ret;
 }
 
@@ -167,16 +210,31 @@ static int bam_dmux_netdev_open(struct net_device *netdev)
 	struct bam_dmux *dmux = bndev->dmux;
 	int ret;
 
-	netdev_err(netdev, "open\n");
+	netdev_err(netdev, "start\n");
+
+	/* Need to resume before starting the queue */
+	ret = pm_runtime_get_sync(dmux->dev);
+	if (ret < 0) {
+		pm_runtime_put_noidle(dmux->dev);
+		return ret;
+	}
+
 	if (!bndev->open) {
-		ret = bam_dmux_send_cmd(dmux, bndev->ch, BAM_DMUX_HDR_CMD_OPEN);
+		ret = bam_dmux_send_cmd(bndev, BAM_DMUX_HDR_CMD_OPEN);
 		if (ret)
-			return ret;
+			goto err;
+
 		bndev->open = true;
+	} else {
+		ret = 0;
 	}
 
 	netif_start_queue(netdev);
-	return 0;
+
+err:
+	pm_runtime_mark_last_busy(dmux->dev);
+	pm_runtime_put_autosuspend(dmux->dev);
+	return ret;
 }
 
 static int bam_dmux_netdev_stop(struct net_device *netdev)
@@ -188,6 +246,9 @@ static int bam_dmux_netdev_stop(struct net_device *netdev)
 
 static netdev_tx_t bam_dmux_netdev_start_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
+	struct bam_dmux_netdev *bndev = netdev_priv(netdev);
+	struct bam_dmux *dmux = bndev->dmux;
+
 	netdev_err(netdev, "start_xmit\n");
 
 	return NETDEV_TX_OK;
@@ -223,7 +284,6 @@ static void bam_dmux_register_netdev_work(struct work_struct *work)
 	int ch, ret;
 
 	dev_err(dmux->dev, "netdev work\n");
-	msleep(500);
 
 	for (ch = 0; ch < BAM_DMUX_NUM_CH; ch++) {
 		if (!(dmux->open_channels & BIT(ch)) || dmux->netdevs[ch])
@@ -253,28 +313,6 @@ static void bam_dmux_register_netdev_work(struct work_struct *work)
 		netdev_info(netdev, "registered channel %d\n", ch);
 		dmux->netdevs[ch] = netdev;
 	}
-}
-
-static bool bam_dmux_skb_dma_map(struct bam_dmux_skb_dma *skb_dma,
-				 enum dma_data_direction dir)
-{
-	struct device *dev = skb_dma->dmux->dev;
-
-	skb_dma->addr = dma_map_single(dev, skb_dma->skb->data, skb_dma->skb->len, dir);
-	if (dma_mapping_error(dev, skb_dma->addr)) {
-		dev_err(dev, "Failed to DMA map buffer\n");
-		skb_dma->addr = 0;
-		return false;
-	}
-
-	return true;
-}
-
-static void bam_dmux_skb_dma_unmap(struct bam_dmux_skb_dma *skb_dma,
-				   enum dma_data_direction dir)
-{
-	dma_unmap_single(skb_dma->dmux->dev, skb_dma->addr, skb_dma->skb->len, dir);
-	skb_dma->addr = 0;
 }
 
 static void bam_dmux_rx_callback(void *data);
@@ -544,10 +582,10 @@ static int __maybe_unused bam_dmux_runtime_resume(struct device *dev)
 		return -ETIMEDOUT;
 	}
 
-	/* Request TX channel */
 	if (dmux->tx)
-		return 0; /* Already requested TX channel */
+		return 0;
 
+	/* Request TX channel */
 	dmux->tx = dma_request_chan(dev, "tx");
 	if (IS_ERR(dmux->rx)) {
 		dev_err(dev, "Failed to request TX DMA channel: %pe\n", dmux->tx);
@@ -596,6 +634,7 @@ static int bam_dmux_probe(struct platform_device *pdev)
 	complete_all(&dmux->pc_ack_completion);
 
 	INIT_WORK(&dmux->register_netdev_work, bam_dmux_register_netdev_work);
+	spin_lock_init(&dmux->tx_lock);
 
 	for (i = 0; i < BAM_DMUX_NUM_SKB; i++) {
 		dmux->rx_skbs[i].dmux = dmux;
