@@ -1,4 +1,5 @@
-#include <linux/delay.h>
+#include <linux/atomic.h>
+#include <linux/bitops.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
 #include <linux/etherdevice.h>
@@ -67,10 +68,10 @@ struct bam_dmux {
 	struct dma_chan *rx, *tx;
 	struct bam_dmux_skb_dma rx_skbs[BAM_DMUX_NUM_SKB];
 	struct bam_dmux_skb_dma tx_skbs[BAM_DMUX_NUM_SKB];
-	spinlock_t tx_lock; /* Protect tx_skbs, tx_next_skb, tx_suspended */
+	spinlock_t tx_lock; /* Protect tx_skbs, tx_next_skb */
 	unsigned int tx_next_skb;
+	atomic_t tx_deferred_skb;
 	struct work_struct tx_wakeup_work;
-	struct bam_dmux_skb_dma *tx_pending_skb;
 
 	unsigned int remote_channels;
 	struct work_struct register_netdev_work;
@@ -123,6 +124,8 @@ static void bam_dmux_tx_wake_queues(struct bam_dmux *dmux)
 {
 	int i;
 
+	dev_err(dmux->dev, "wake queues\n");
+
 	for (i = 0; i < BAM_DMUX_NUM_CH; ++i) {
 		struct net_device *netdev = dmux->netdevs[i];
 
@@ -131,11 +134,26 @@ static void bam_dmux_tx_wake_queues(struct bam_dmux *dmux)
 	}
 }
 
+static void bam_dmux_tx_stop_queues(struct bam_dmux *dmux)
+{
+	int i;
+
+	dev_err(dmux->dev, "stop queues\n");
+
+	for (i = 0; i < BAM_DMUX_NUM_CH; ++i) {
+		struct net_device *netdev = dmux->netdevs[i];
+
+		if (netdev)
+			netif_stop_queue(netdev);
+	}
+}
+
 static void bam_dmux_tx_callback(void *data)
 {
 	struct bam_dmux_skb_dma *skb_dma = data;
 	struct bam_dmux *dmux = skb_dma->dmux;
 	struct sk_buff *skb = skb_dma->skb;
+	unsigned long flags;
 
 	dev_err(dmux->dev, "TX callback\n");
 
@@ -145,8 +163,12 @@ static void bam_dmux_tx_callback(void *data)
 	bam_dmux_skb_dma_unmap(skb_dma, DMA_TO_DEVICE);
 	skb_dma->skb = NULL;
 
-	// FIXME
-	bam_dmux_tx_wake_queues(dmux);
+	/* Were we the one blocking the queue? */
+	spin_lock_irqsave(&dmux->tx_lock, flags);
+	if (skb_dma == &dmux->tx_skbs[dmux->tx_next_skb % BAM_DMUX_NUM_SKB])
+		bam_dmux_tx_wake_queues(dmux);
+	spin_unlock_irqrestore(&dmux->tx_lock, flags);
+
 	dev_consume_skb_any(skb);
 }
 
@@ -169,19 +191,9 @@ static bool bam_dmux_skb_dma_submit_tx(struct bam_dmux_skb_dma *skb_dma)
 	return true;
 }
 
-static void bam_dmux_tx_stop_queues(struct bam_dmux *dmux)
-{
-	int i;
-
-	for (i = 0; i < BAM_DMUX_NUM_CH; ++i) {
-		struct net_device *netdev = dmux->netdevs[i];
-
-		if (netdev)
-			netif_stop_queue(netdev);
-	}
-}
-
-static struct bam_dmux_skb_dma *bam_dmux_tx_queue(struct bam_dmux *dmux, struct sk_buff *skb)
+/* Must be called with dmux->tx_lock held */
+static struct bam_dmux_skb_dma *
+bam_dmux_tx_queue(struct bam_dmux *dmux, struct sk_buff *skb)
 {
 	struct bam_dmux_skb_dma *skb_dma;
 
@@ -193,6 +205,11 @@ static struct bam_dmux_skb_dma *bam_dmux_tx_queue(struct bam_dmux *dmux, struct 
 
 	skb_dma->skb = skb;
 	dmux->tx_next_skb++;
+
+	/* Do we have space for more skbs? */
+	if (dmux->tx_skbs[dmux->tx_next_skb % BAM_DMUX_NUM_SKB].skb)
+		bam_dmux_tx_stop_queues(dmux);
+
 	return skb_dma;
 }
 
@@ -217,9 +234,8 @@ static int bam_dmux_send_cmd(struct bam_dmux_netdev *bndev, u8 cmd)
 	skb = alloc_skb(sizeof(*hdr), GFP_KERNEL);
 	if (!skb)
 		return -ENOMEM;
-	hdr = skb_put(skb, sizeof(*hdr));
 
-	memset(hdr, 0, sizeof(*hdr));
+	hdr = skb_put_zero(skb, sizeof(*hdr));
 	hdr->magic = BAM_DMUX_HDR_MAGIC;
 	hdr->cmd = cmd;
 	hdr->ch = bndev->ch;
@@ -237,11 +253,12 @@ static int bam_dmux_send_cmd(struct bam_dmux_netdev *bndev, u8 cmd)
 		ret = -EBUSY;
 		goto err_unlock;
 	}
+	spin_unlock_irqrestore(&dmux->tx_lock, flags);
+
 	if (!bam_dmux_skb_dma_map(skb_dma, DMA_TO_DEVICE)) {
 		ret = -ENOMEM;
 		goto err_unlock;
 	}
-	spin_unlock_irqrestore(&dmux->tx_lock, flags);
 
 	if (!bam_dmux_skb_dma_submit_tx(skb_dma)) {
 		ret = -EIO;
@@ -324,13 +341,14 @@ static int bam_dmux_tx_prepare_skb(struct bam_dmux_netdev *bndev, struct sk_buff
 	}
 
 	hdr = skb_push(skb, sizeof(*hdr));
+	memset(hdr, 0, sizeof(*hdr));
 	hdr->magic = BAM_DMUX_HDR_MAGIC;
 	hdr->cmd = BAM_DMUX_HDR_CMD_DATA;
 	hdr->pad = pad;
 	hdr->ch = bndev->ch;
 	hdr->len = skb->len;
 	if (pad)
-		skb_put(skb, pad);
+		skb_put_zero(skb, pad);
 
 	return 0;
 }
@@ -348,8 +366,9 @@ static netdev_tx_t bam_dmux_netdev_start_xmit(struct sk_buff *skb, struct net_de
 {
 	struct bam_dmux_netdev *bndev = netdev_priv(netdev);
 	struct bam_dmux *dmux = bndev->dmux;
-	struct bam_dmux_skb_dma *skb_dma = NULL;
+	struct bam_dmux_skb_dma *skb_dma;
 	unsigned long flags;
+	unsigned int num;
 	int active, ret;
 
 	netdev_err(netdev, "start_xmit\n");
@@ -363,22 +382,25 @@ static netdev_tx_t bam_dmux_netdev_start_xmit(struct sk_buff *skb, struct net_de
 		goto drop;
 
 	spin_lock_irqsave(&dmux->tx_lock, flags);
-	if (!active && dmux->tx_pending_skb)
-		goto busy;
+	num = dmux->tx_next_skb % BAM_DMUX_NUM_SKB;
 	skb_dma = bam_dmux_tx_queue(dmux, skb);
-	if (!skb_dma)
-		goto busy;
-	if (!active)
-		dmux->tx_pending_skb = skb_dma;
+	if (!skb_dma) {
+		netdev_err(netdev, "busy\n");
+		spin_unlock_irqrestore(&dmux->tx_lock, flags);
+		pm_runtime_mark_last_busy(dmux->dev);
+		pm_runtime_put_autosuspend(dmux->dev);
+		bam_dmux_tx_unprepare_skb(skb);
+		return NETDEV_TX_BUSY;
+	}
 	spin_unlock_irqrestore(&dmux->tx_lock, flags);
 
 	if (!bam_dmux_skb_dma_map(skb_dma, DMA_TO_DEVICE))
 		goto drop;
 
 	if (!active) {
-		netdev_err(netdev, "now active? %d\n", pm_runtime_active(dmux->dev));
-		bam_dmux_tx_stop_queues(dmux);
-		schedule_work(&dmux->tx_wakeup_work);
+		netdev_err(netdev, "defer %d\n", num);
+		if (!atomic_fetch_or(BIT(num), &dmux->tx_deferred_skb))
+			schedule_work(&dmux->tx_wakeup_work);
 		return NETDEV_TX_OK;
 	}
 
@@ -389,19 +411,10 @@ static netdev_tx_t bam_dmux_netdev_start_xmit(struct sk_buff *skb, struct net_de
 	dma_async_issue_pending(dmux->tx);
 	return NETDEV_TX_OK;
 
-busy:
-	netdev_err(netdev, "busy\n");
-	spin_unlock_irqrestore(&dmux->tx_lock, flags);
-	pm_runtime_mark_last_busy(dmux->dev);
-	pm_runtime_put_autosuspend(dmux->dev);
-	bam_dmux_tx_unprepare_skb(skb);
-	return NETDEV_TX_BUSY;
 drop:
 	netdev_err(netdev, "drop\n");
 	pm_runtime_mark_last_busy(dmux->dev);
 	pm_runtime_put_autosuspend(dmux->dev);
-	if (!active && dmux->tx_pending_skb == skb_dma)
-		dmux->tx_pending_skb = NULL;
 	bam_dmux_tx_queue_fail(skb_dma);
 	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
@@ -410,9 +423,8 @@ drop:
 static void bam_dmux_tx_wakeup_work(struct work_struct *work)
 {
 	struct bam_dmux *dmux = container_of(work, struct bam_dmux, tx_wakeup_work);
-	struct bam_dmux_skb_dma *skb_dma;
-	unsigned long flags;
-	int ret;
+	unsigned long pending;
+	int ret, i;
 
 	ret = pm_runtime_get_sync(dmux->dev);
 	if (ret < 0) {
@@ -421,16 +433,17 @@ static void bam_dmux_tx_wakeup_work(struct work_struct *work)
 		return;
 	}
 
-	spin_lock_irqsave(&dmux->tx_lock, flags);
-	skb_dma = dmux->tx_pending_skb;
-	dmux->tx_pending_skb = NULL;
-	spin_unlock_irqrestore(&dmux->tx_lock, flags);
+	pending = atomic_xchg(&dmux->tx_deferred_skb, 0);
+	if (!pending)
+		goto out;
 
-	bam_dmux_tx_wake_queues(dmux);
+	for_each_set_bit(i, &pending, BAM_DMUX_NUM_SKB) {
+		dev_err(dmux->dev, "submit %d\n", i);
+		bam_dmux_skb_dma_submit_tx(&dmux->tx_skbs[i]);
+	}
+	dma_async_issue_pending(dmux->tx);
 
-	if (bam_dmux_skb_dma_submit_tx(skb_dma))
-		dma_async_issue_pending(dmux->tx);
-
+out:
 	pm_runtime_mark_last_busy(dmux->dev);
 	pm_runtime_put_autosuspend(dmux->dev);
 }
@@ -530,6 +543,39 @@ static bool bam_dmux_skb_dma_queue_rx(struct bam_dmux_skb_dma *skb_dma, gfp_t gf
 	       bam_dmux_skb_dma_submit_rx(skb_dma);
 }
 
+/*
+ * FIXME: For some reason the modem send raw-ip packets even in ethernet mode.
+ * The qmi_wwan driver mentions a similar problem due to a "firmware bug",
+ * and uses code similar to the one below to generate an ethernet header
+ * in case of such weird packets.
+ */
+static __be16 bam_dmux_eth_type_trans(struct sk_buff *skb, struct net_device *dev)
+{
+	__be16 protocol;
+
+	/* Determine L3 protocol */
+	switch (skb->data[0] & 0xf0) {
+	case 0x40:
+		protocol = htons(ETH_P_IP);
+		break;
+	case 0x60:
+		protocol = htons(ETH_P_IPV6);
+		break;
+	default:
+		/* Seems to be valid */
+		return eth_type_trans(skb, dev);
+	}
+
+	/* Generate a dummy ethernet header */
+	skb_push(skb, ETH_HLEN);
+	skb_reset_mac_header(skb);
+	eth_hdr(skb)->h_proto = protocol;
+	eth_zero_addr(eth_hdr(skb)->h_source);
+	memcpy(eth_hdr(skb)->h_dest, dev->dev_addr, ETH_ALEN);
+
+	return eth_type_trans(skb, dev);
+}
+
 static bool bam_dmux_cmd_data(struct bam_dmux_skb_dma *skb_dma)
 {
 	struct bam_dmux *dmux = skb_dma->dmux;
@@ -555,6 +601,7 @@ static bool bam_dmux_cmd_data(struct bam_dmux_skb_dma *skb_dma)
 	skb_trim(skb, hdr->len - hdr->pad);
 
 	skb->dev = netdev;
+	skb->protocol = bam_dmux_eth_type_trans(skb, netdev);
 	netif_rx_ni(skb);
 
 	if (bam_dmux_skb_dma_queue_rx(skb_dma, GFP_ATOMIC))
