@@ -43,10 +43,10 @@ enum {
 };
 
 struct bam_dmux_hdr {
-	u16 magic;	/* = BAM_DMUX_HDR_MAGIC */
+	u16 magic;
 	u8 signal;
 	u8 cmd;
-	u8 pad;		/* 0...3; len should be word-aligned */
+	u8 pad;
 	u8 ch;
 	u16 len;
 };
@@ -346,7 +346,7 @@ static int bam_dmux_tx_prepare_skb(struct bam_dmux_netdev *bndev, struct sk_buff
 	hdr->cmd = BAM_DMUX_HDR_CMD_DATA;
 	hdr->pad = pad;
 	hdr->ch = bndev->ch;
-	hdr->len = skb->len;
+	hdr->len = skb->len - sizeof(*hdr);
 	if (pad)
 		skb_put_zero(skb, pad);
 
@@ -556,12 +556,15 @@ static __be16 bam_dmux_eth_type_trans(struct sk_buff *skb, struct net_device *de
 	/* Determine L3 protocol */
 	switch (skb->data[0] & 0xf0) {
 	case 0x40:
+		netdev_err(dev, "ip\n");
 		protocol = htons(ETH_P_IP);
 		break;
 	case 0x60:
+		netdev_err(dev, "ipv6\n");
 		protocol = htons(ETH_P_IPV6);
 		break;
 	default:
+		netdev_err(dev, "eth?\n");
 		/* Seems to be valid */
 		return eth_type_trans(skb, dev);
 	}
@@ -598,7 +601,7 @@ static bool bam_dmux_cmd_data(struct bam_dmux_skb_dma *skb_dma)
 		hdr->len = BAM_DMUX_MAX_DATA_SIZE;
 	}
 	skb_pull(skb, sizeof(*hdr));
-	skb_trim(skb, hdr->len - hdr->pad);
+	skb_trim(skb, hdr->len);
 
 	skb->dev = netdev;
 	skb->protocol = bam_dmux_eth_type_trans(skb, netdev);
@@ -691,6 +694,10 @@ out:
 static bool bam_dmux_power_on(struct bam_dmux *dmux)
 {
 	struct device *dev = dmux->dev;
+	struct dma_slave_config dma_rx_conf = {
+		.direction = DMA_DEV_TO_MEM,
+		.src_maxburst = BAM_DMUX_BUFFER_SIZE,
+	};
 	int i;
 
 	dmux->rx = dma_request_chan(dev, "rx");
@@ -699,6 +706,7 @@ static bool bam_dmux_power_on(struct bam_dmux *dmux)
 		dmux->rx = NULL;
 		return false;
 	}
+	dmaengine_slave_config(dmux->rx, &dma_rx_conf);
 
 	for (i = 0; i < BAM_DMUX_NUM_SKB; i++) {
 		if (!bam_dmux_skb_dma_queue_rx(&dmux->rx_skbs[i], GFP_KERNEL))
