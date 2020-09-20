@@ -574,8 +574,6 @@ static void bam_free_chan(struct dma_chan *chan)
 	writel_relaxed(0, bam_addr(bdev, bchan->id, BAM_P_IRQ_EN));
 
 	if (--bdev->active_channels == 0 && bdev->remote_power_collapse) {
-		dev_err(bdev->dev, "off reset\n");
-
 		/* s/w reset bam */
 		val = readl_relaxed(bam_addr(bdev, 0, BAM_CTRL));
 		val |= BAM_SW_RST;
@@ -1163,8 +1161,6 @@ static struct dma_chan *bam_dma_xlate(struct of_phandle_args *dma_spec,
 static void bam_reset(struct bam_device *bdev)
 {
 	u32 val;
-
-	dev_err(bdev->dev, "bam reset\n");
 
 	/* s/w reset bam */
 	/* after reset all pipes are disabled and idle */

@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (c) 2020, Stephan Gerhold
+// Protocol adapted from driver Copyright (c) 2011-2015, The Linux Foundation
+
+// TODO: Remove
+#define DEBUG
+
 #include <linux/atomic.h>
 #include <linux/bitops.h>
 #include <linux/dma-mapping.h>
@@ -124,7 +131,7 @@ static void bam_dmux_tx_wake_queues(struct bam_dmux *dmux)
 {
 	int i;
 
-	dev_err(dmux->dev, "wake queues\n");
+	dev_dbg(dmux->dev, "wake queues\n");
 
 	for (i = 0; i < BAM_DMUX_NUM_CH; ++i) {
 		struct net_device *netdev = dmux->netdevs[i];
@@ -138,7 +145,7 @@ static void bam_dmux_tx_stop_queues(struct bam_dmux *dmux)
 {
 	int i;
 
-	dev_err(dmux->dev, "stop queues\n");
+	dev_dbg(dmux->dev, "stop queues\n");
 
 	for (i = 0; i < BAM_DMUX_NUM_CH; ++i) {
 		struct net_device *netdev = dmux->netdevs[i];
@@ -155,16 +162,14 @@ static void bam_dmux_tx_callback(void *data)
 	struct sk_buff *skb = skb_dma->skb;
 	unsigned long flags;
 
-	dev_err(dmux->dev, "TX callback\n");
-
 	pm_runtime_mark_last_busy(dmux->dev);
 	pm_runtime_put_autosuspend(dmux->dev);
 
 	bam_dmux_skb_dma_unmap(skb_dma, DMA_TO_DEVICE);
 	skb_dma->skb = NULL;
 
-	/* Were we the one blocking the queue? */
 	spin_lock_irqsave(&dmux->tx_lock, flags);
+	/* Were we the one blocking the queue? */
 	if (skb_dma == &dmux->tx_skbs[dmux->tx_next_skb % BAM_DMUX_NUM_SKB])
 		bam_dmux_tx_wake_queues(dmux);
 	spin_unlock_irqrestore(&dmux->tx_lock, flags);
@@ -191,15 +196,18 @@ static bool bam_dmux_skb_dma_submit_tx(struct bam_dmux_skb_dma *skb_dma)
 	return true;
 }
 
-/* Must be called with dmux->tx_lock held */
 static struct bam_dmux_skb_dma *
-bam_dmux_tx_queue(struct bam_dmux *dmux, struct sk_buff *skb)
+bam_dmux_tx_queue(struct bam_dmux *dmux, struct sk_buff *skb, unsigned int *num)
 {
 	struct bam_dmux_skb_dma *skb_dma;
+	unsigned long flags;
 
-	skb_dma = &dmux->tx_skbs[dmux->tx_next_skb % BAM_DMUX_NUM_SKB];
+	spin_lock_irqsave(&dmux->tx_lock, flags);
+	*num = dmux->tx_next_skb % BAM_DMUX_NUM_SKB;
+	skb_dma = &dmux->tx_skbs[*num];
 	if (skb_dma->skb) {
 		bam_dmux_tx_stop_queues(dmux);
+		spin_unlock_irqrestore(&dmux->tx_lock, flags);
 		return NULL;
 	}
 
@@ -210,6 +218,8 @@ bam_dmux_tx_queue(struct bam_dmux *dmux, struct sk_buff *skb)
 	if (dmux->tx_skbs[dmux->tx_next_skb % BAM_DMUX_NUM_SKB].skb)
 		bam_dmux_tx_stop_queues(dmux);
 
+	spin_unlock_irqrestore(&dmux->tx_lock, flags);
+	dev_dbg(dmux->dev, "TX(%u): len: %u\n", *num, skb->len);
 	return skb_dma;
 }
 
@@ -228,7 +238,7 @@ static int bam_dmux_send_cmd(struct bam_dmux_netdev *bndev, u8 cmd)
 	struct bam_dmux_skb_dma *skb_dma;
 	struct bam_dmux_hdr *hdr;
 	struct sk_buff *skb;
-	unsigned long flags;
+	unsigned int num;
 	int ret;
 
 	skb = alloc_skb(sizeof(*hdr), GFP_KERNEL);
@@ -247,17 +257,15 @@ static int bam_dmux_send_cmd(struct bam_dmux_netdev *bndev, u8 cmd)
 		return ret;
 	}
 
-	spin_lock_irqsave(&dmux->tx_lock, flags);
-	skb_dma = bam_dmux_tx_queue(dmux, skb);
+	skb_dma = bam_dmux_tx_queue(dmux, skb, &num);
 	if (!skb_dma) {
 		ret = -EBUSY;
-		goto err_unlock;
+		goto err;
 	}
-	spin_unlock_irqrestore(&dmux->tx_lock, flags);
 
 	if (!bam_dmux_skb_dma_map(skb_dma, DMA_TO_DEVICE)) {
 		ret = -ENOMEM;
-		goto err_unlock;
+		goto err;
 	}
 
 	if (!bam_dmux_skb_dma_submit_tx(skb_dma)) {
@@ -268,8 +276,6 @@ static int bam_dmux_send_cmd(struct bam_dmux_netdev *bndev, u8 cmd)
 	dma_async_issue_pending(dmux->tx);
 	return 0;
 
-err_unlock:
-	spin_unlock_irqrestore(&dmux->tx_lock, flags);
 err:
 	pm_runtime_mark_last_busy(dmux->dev);
 	pm_runtime_put_autosuspend(dmux->dev);
@@ -283,8 +289,6 @@ static int bam_dmux_netdev_open(struct net_device *netdev)
 	struct bam_dmux_netdev *bndev = netdev_priv(netdev);
 	struct bam_dmux *dmux = bndev->dmux;
 	int ret;
-
-	netdev_err(netdev, "start\n");
 
 	/* Need to resume before starting the queue */
 	ret = pm_runtime_get_sync(dmux->dev);
@@ -313,7 +317,6 @@ err:
 
 static int bam_dmux_netdev_stop(struct net_device *netdev)
 {
-	netdev_err(netdev, "stop\n");
 	netif_stop_queue(netdev);
 	return 0;
 }
@@ -334,15 +337,14 @@ static int bam_dmux_tx_prepare_skb(struct bam_dmux_netdev *bndev, struct sk_buff
 	int ret;
 
 	if (head || tail || skb_cloned(skb)) {
-		dev_err(bndev->dmux->dev, "expand head: %d, tail: %d\n", head, tail);
 		ret = pskb_expand_head(skb, head, tail, GFP_ATOMIC);
 		if (ret)
 			return ret;
 	}
 
 	hdr = skb_push(skb, sizeof(*hdr));
-	memset(hdr, 0, sizeof(*hdr));
 	hdr->magic = BAM_DMUX_HDR_MAGIC;
+	hdr->signal = 0;
 	hdr->cmd = BAM_DMUX_HDR_CMD_DATA;
 	hdr->pad = pad;
 	hdr->ch = bndev->ch;
@@ -367,11 +369,8 @@ static netdev_tx_t bam_dmux_netdev_start_xmit(struct sk_buff *skb, struct net_de
 	struct bam_dmux_netdev *bndev = netdev_priv(netdev);
 	struct bam_dmux *dmux = bndev->dmux;
 	struct bam_dmux_skb_dma *skb_dma;
-	unsigned long flags;
 	unsigned int num;
 	int active, ret;
-
-	netdev_err(netdev, "start_xmit\n");
 
 	active = pm_runtime_get(dmux->dev);
 	if (active < 0)
@@ -381,24 +380,19 @@ static netdev_tx_t bam_dmux_netdev_start_xmit(struct sk_buff *skb, struct net_de
 	if (ret)
 		goto drop;
 
-	spin_lock_irqsave(&dmux->tx_lock, flags);
-	num = dmux->tx_next_skb % BAM_DMUX_NUM_SKB;
-	skb_dma = bam_dmux_tx_queue(dmux, skb);
+	skb_dma = bam_dmux_tx_queue(dmux, skb, &num);
 	if (!skb_dma) {
-		netdev_err(netdev, "busy\n");
-		spin_unlock_irqrestore(&dmux->tx_lock, flags);
 		pm_runtime_mark_last_busy(dmux->dev);
 		pm_runtime_put_autosuspend(dmux->dev);
 		bam_dmux_tx_unprepare_skb(skb);
 		return NETDEV_TX_BUSY;
 	}
-	spin_unlock_irqrestore(&dmux->tx_lock, flags);
 
 	if (!bam_dmux_skb_dma_map(skb_dma, DMA_TO_DEVICE))
 		goto drop;
 
 	if (!active) {
-		netdev_err(netdev, "defer %d\n", num);
+		/* Cannot sleep here so mark skb for wakeup handler and return */
 		if (!atomic_fetch_or(BIT(num), &dmux->tx_deferred_skb))
 			schedule_work(&dmux->tx_wakeup_work);
 		return NETDEV_TX_OK;
@@ -412,7 +406,6 @@ static netdev_tx_t bam_dmux_netdev_start_xmit(struct sk_buff *skb, struct net_de
 	return NETDEV_TX_OK;
 
 drop:
-	netdev_err(netdev, "drop\n");
 	pm_runtime_mark_last_busy(dmux->dev);
 	pm_runtime_put_autosuspend(dmux->dev);
 	bam_dmux_tx_queue_fail(skb_dma);
@@ -433,12 +426,12 @@ static void bam_dmux_tx_wakeup_work(struct work_struct *work)
 		return;
 	}
 
-	pending = atomic_xchg(&dmux->tx_deferred_skb, 0);
+	pending = (unsigned int)atomic_xchg(&dmux->tx_deferred_skb, 0);
 	if (!pending)
 		goto out;
 
+	dev_dbg(dmux->dev, "pending skbs after wakeup: %#lx\n", pending);
 	for_each_set_bit(i, &pending, BAM_DMUX_NUM_SKB) {
-		dev_err(dmux->dev, "submit %d\n", i);
 		bam_dmux_skb_dma_submit_tx(&dmux->tx_skbs[i]);
 	}
 	dma_async_issue_pending(dmux->tx);
@@ -465,7 +458,7 @@ static void bam_dmux_netdev_setup(struct net_device *netdev)
 
 	netdev->needed_headroom = sizeof(struct bam_dmux_hdr);
 	netdev->needed_tailroom = sizeof(u32); /* word-aligned */
-	netdev->max_mtu = 2000; /* TODO: Dynamic MTU */
+	netdev->max_mtu = 2000;
 	netdev->mtu = netdev->max_mtu;
 }
 
@@ -476,8 +469,6 @@ static void bam_dmux_register_netdev_work(struct work_struct *work)
 	struct net_device *netdev;
 	char *name;
 	int ch, ret;
-
-	dev_err(dmux->dev, "netdev work\n");
 
 	for (ch = 0; ch < BAM_DMUX_NUM_CH; ch++) {
 		if (!(dmux->remote_channels & BIT(ch)) || dmux->netdevs[ch])
@@ -498,13 +489,12 @@ static void bam_dmux_register_netdev_work(struct work_struct *work)
 
 		ret = register_netdev(netdev);
 		if (ret) {
-			dev_err(dmux->dev, "Failed to register netdev for channel %d: %d\n",
+			dev_err(dmux->dev, "Failed to register netdev for channel %u: %d\n",
 				ch, ret);
 			free_netdev(netdev);
 			return;
 		}
 
-		netdev_info(netdev, "registered channel %d\n", ch);
 		dmux->netdevs[ch] = netdev;
 	}
 }
@@ -556,15 +546,12 @@ static __be16 bam_dmux_eth_type_trans(struct sk_buff *skb, struct net_device *de
 	/* Determine L3 protocol */
 	switch (skb->data[0] & 0xf0) {
 	case 0x40:
-		netdev_err(dev, "ip\n");
 		protocol = htons(ETH_P_IP);
 		break;
 	case 0x60:
-		netdev_err(dev, "ipv6\n");
 		protocol = htons(ETH_P_IPV6);
 		break;
 	default:
-		netdev_err(dev, "eth?\n");
 		/* Seems to be valid */
 		return eth_type_trans(skb, dev);
 	}
@@ -587,7 +574,7 @@ static bool bam_dmux_cmd_data(struct bam_dmux_skb_dma *skb_dma)
 	struct net_device *netdev = dmux->netdevs[hdr->ch];
 
 	if (!netdev || !netif_running(netdev)) {
-		dev_warn(dmux->dev, "Data packet for inactive channel %d\n", hdr->ch);
+		dev_warn(dmux->dev, "Data packet for inactive channel %u\n", hdr->ch);
 		return false;
 	}
 
@@ -596,7 +583,7 @@ static bool bam_dmux_cmd_data(struct bam_dmux_skb_dma *skb_dma)
 	bam_dmux_skb_dma_unmap(skb_dma, DMA_FROM_DEVICE);
 
 	if (hdr->len > BAM_DMUX_MAX_DATA_SIZE) {
-		dev_warn(dmux->dev, "Packet larger than buffer? (%d > %d)\n",
+		dev_warn(dmux->dev, "Packet larger than buffer? (%u > %u)\n",
 			 hdr->len, (u16)BAM_DMUX_MAX_DATA_SIZE);
 		hdr->len = BAM_DMUX_MAX_DATA_SIZE;
 	}
@@ -617,12 +604,12 @@ static void bam_dmux_cmd_open(struct bam_dmux *dmux, struct bam_dmux_hdr *hdr)
 {
 	struct net_device *netdev = dmux->netdevs[hdr->ch];
 
+	dev_dbg(dmux->dev, "open channel: %u\n", hdr->ch);
+
 	if (dmux->remote_channels & BIT(hdr->ch)) {
-		dev_err(dmux->dev, "Channel already open: %d\n", hdr->ch);
+		dev_err(dmux->dev, "Channel already open: %u\n", hdr->ch);
 		return;
 	}
-
-	dev_err(dmux->dev, "open channel %d\n", hdr->ch);
 
 	dmux->remote_channels |= BIT(hdr->ch);
 
@@ -639,8 +626,10 @@ static void bam_dmux_cmd_close(struct bam_dmux *dmux, struct bam_dmux_hdr *hdr)
 {
 	struct net_device *netdev = dmux->netdevs[hdr->ch];
 
+	dev_dbg(dmux->dev, "close channel: %u\n", hdr->ch);
+
 	if (!(dmux->remote_channels & BIT(hdr->ch))) {
-		dev_err(dmux->dev, "Channel not open: %d\n", hdr->ch);
+		dev_err(dmux->dev, "Channel not open: %u\n", hdr->ch);
 		return;
 	}
 
@@ -662,11 +651,11 @@ static void bam_dmux_rx_callback(void *data)
 	}
 
 	if (hdr->ch >= BAM_DMUX_NUM_CH) {
-		dev_warn(dmux->dev, "Unsupported channel: %d\n", hdr->ch);
+		dev_dbg(dmux->dev, "unsupported channel: %u\n", hdr->ch);
 		goto out;
 	}
 
-	dev_err(dmux->dev, "callback: magic: %#x, signal: %#x, cmd: %d, pad: %d, ch: %d, len: %d\n",
+	dev_dbg(dmux->dev, "RX: magic: %#x, signal: %#x, cmd: %u, pad: %u, ch: %u, len: %u\n",
 		hdr->magic, hdr->signal, hdr->cmd, hdr->pad, hdr->ch, hdr->len);
 
 	switch (hdr->cmd) {
@@ -681,7 +670,7 @@ static void bam_dmux_rx_callback(void *data)
 		bam_dmux_cmd_close(dmux, hdr);
 		break;
 	default:
-		dev_warn(dmux->dev, "Unsupported command %d on channel %d\n",
+		dev_warn(dmux->dev, "Unsupported command %u on channel %u\n",
 			 hdr->cmd, hdr->ch);
 		break;
 	}
@@ -751,7 +740,7 @@ static irqreturn_t bam_dmux_pc_irq(int irq, void *data)
 	struct bam_dmux *dmux = data;
 
 	dmux->pc_state = !dmux->pc_state;
-	dev_err(dmux->dev, "pc: %d\n", dmux->pc_state);
+	dev_dbg(dmux->dev, "pc: %u\n", dmux->pc_state);
 
 	if (dmux->pc_state) {
 		if (bam_dmux_power_on(dmux)) {
@@ -774,7 +763,7 @@ static irqreturn_t bam_dmux_pc_ack_irq(int irq, void *data)
 {
 	struct bam_dmux *dmux = data;
 
-	dev_err(dmux->dev, "pc ack\n");
+	dev_dbg(dmux->dev, "pc ack\n");
 	complete_all(&dmux->pc_ack_completion);
 
 	return IRQ_HANDLED;
@@ -784,7 +773,7 @@ static int __maybe_unused bam_dmux_runtime_suspend(struct device *dev)
 {
 	struct bam_dmux *dmux = dev_get_drvdata(dev);
 
-	dev_err(dev, "runtime suspend\n");
+	dev_dbg(dev, "runtime suspend\n");
 	bam_dmux_pc_vote(dmux, false);
 
 	return 0;
@@ -794,7 +783,7 @@ static int __maybe_unused bam_dmux_runtime_resume(struct device *dev)
 {
 	struct bam_dmux *dmux = dev_get_drvdata(dev);
 
-	dev_err(dev, "runtime resume\n");
+	dev_dbg(dev, "runtime resume\n");
 
 	/* Wait until previous power down was acked */
 	if (!wait_for_completion_timeout(&dmux->pc_ack_completion,
@@ -929,6 +918,7 @@ MODULE_DEVICE_TABLE(of, bam_dmux_of_match);
 
 static struct platform_driver bam_dmux_driver = {
 	.probe = bam_dmux_probe,
+	// TODO: .remove = bam_dmux_remove,
 	.driver = {
 		.name = "bam-dmux",
 		.pm = &bam_dmux_pm_ops,
@@ -937,5 +927,6 @@ static struct platform_driver bam_dmux_driver = {
 };
 module_platform_driver(bam_dmux_driver);
 
-MODULE_DESCRIPTION("QCOM BAM DMUX ethernet/IP driver");
+MODULE_DESCRIPTION("QCOM BAM DMUX Ethernet/IP driver");
+MODULE_AUTHOR("Stephan Gerhold <stephan@gerhold.net>");
 MODULE_LICENSE("GPL v2");
