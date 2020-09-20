@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Copyright (c) 2020, Stephan Gerhold
-// Protocol adapted from driver Copyright (c) 2011-2015, The Linux Foundation
+// Copyright (c) 2020  Stephan Gerhold
 
 // TODO: Remove
 #define DEBUG
