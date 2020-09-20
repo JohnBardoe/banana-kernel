@@ -126,15 +126,15 @@
 		#size-cells = <0>;
 
 		touchkey: touchkey@20 {
-			/*
-			 * FIXME: This touchkey is built using an Abov MCU
-			 * but we don't have an extra compatible for it yet.
-			 */
+			/* Note: Actually an Abov MCU that implements same interface */
 			compatible = "coreriver,tc360-touchkey";
 			reg = <0x20>;
 
 			interrupt-parent = <&msmgpio>;
 			interrupts = <98 IRQ_TYPE_EDGE_FALLING>;
+
+			/* vcc/vdd-supply are board-specific */
+			vddio-supply = <&pm8916_l6>;
 
 			linux,keycodes = <KEY_APPSELECT KEY_BACK>;
 
