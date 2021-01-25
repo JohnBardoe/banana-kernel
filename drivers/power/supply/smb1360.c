@@ -205,9 +205,18 @@
 #define OTP_WRITABLE_REG_6		0xE5
 #define OTP_WRITABLE_REG_7		0xE6
 #define OTP_WRITABLE_REG_8		0xE7
+#define OTP_WRITABLE_REG_9		0xE8
+#define OTP_WRITABLE_REG_10		0xE9
+#define OTP_WRITABLE_REG_11		0xEA
+#define OTP_WRITABLE_REG_12		0xEB
+#define OTP_WRITABLE_REG_13		0xEC
+#define OTP_WRITABLE_REG_14		0xED
+#define OTP_WRITABLE_REG_15		0xEE
+#define OTP_WRITABLE_REG_16		0xEF
 #define OTP_BACKUP_MAP_REG		0xF0
 #define CURRENT_GAIN_BITMAP		0x5000
 #define HARD_JEITA_BITMAP		0x0500
+#define RSLOW_BITMAP			0x00AA
 
 #define OTP_GAIN_FIRST_HALF_REG_ADDR	0x1D
 #define OTP_GAIN_SECOND_HALF_REG_ADDR	0x1E
@@ -917,14 +926,21 @@ static int smb1360_set_otp_hard_jeita_threshold(struct smb1360_battery *battery)
 	return regmap_bulk_write(battery->fg_regmap, OTP_WRITABLE_REG_5, val, ARRAY_SIZE(val));
 }
 
+static int smb1360_config_otp_rslow(struct smb1360_battery *battery)
+{
+	u8 val[] = { 0x54, 0x18, 0x55, 0x6A, 0x56, 0x4C, 0x57, 0x6A };
+	return regmap_bulk_write(battery->fg_regmap, OTP_WRITABLE_REG_9, val, ARRAY_SIZE(val));
+}
+
 static int smb1360_reconf_otp(struct smb1360_battery *battery)
 {
 	bool hard_jeita = device_property_read_bool(battery->dev, "qcom,otp-hard-jeita-config");
+	bool otp_rslow = device_property_read_bool(battery->dev, "asus,otp-rslow-config");
 	u16 backup_map = 0;
 	__be16 val;
 	int ret;
 
-	if (!battery->rsense_10mohm && !hard_jeita)
+	if (!battery->rsense_10mohm && !hard_jeita && !otp_rslow)
 		return 0;
 
 	ret = smb1360_enable_fg_access(battery);
@@ -946,6 +962,16 @@ static int smb1360_reconf_otp(struct smb1360_battery *battery)
 			dev_err(battery->dev, "unable to modify otp hard jeita: %d\n", ret);
 		else
 			backup_map |= HARD_JEITA_BITMAP;
+	}
+
+	if (otp_rslow) {
+		ret = smb1360_config_otp_rslow(battery);
+		if (ret)
+			dev_err(battery->dev,
+				"unable to modify otp rslow: %d\n", ret);
+		else
+			backup_map |= RSLOW_BITMAP;
+
 	}
 
 	val = cpu_to_be16(backup_map);

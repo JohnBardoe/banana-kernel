@@ -194,6 +194,12 @@ properties:
       from battery when device working at OTG mode.
       The possible values are 350, 550, 950, 1500mA.
 
+  asus,otp-rslow-config:
+    type: boolean
+    description:
+      Found on asus-zc550kl as "qcom,otp-rslow-cfg", it lacks
+      any proper documentation.
+
   usb_otg_vbus:
     description: Regulator controlling USB OTG VBUS.
 
