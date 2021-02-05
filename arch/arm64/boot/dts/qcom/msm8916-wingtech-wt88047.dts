@@ -122,6 +122,60 @@
 	};
 };
 
+&blsp_i2c4 {
+	status = "okay";
+
+	charger: battery@14 {
+		compatible = "qcom,smb1360";
+		reg = <0x14>;
+
+		interrupt-parent = <&msmgpio>;
+		interrupts = <62 IRQ_TYPE_LEVEL_LOW>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&smb_int_default>;
+
+		qcom,chg-inhibit-disabled;
+		qcom,fg-cutoff-voltage-mv = <3400>;
+		qcom,fg-iterm-ma = <150>;
+		qcom,fg-ibatt-standby-ma = <200>;
+		qcom,fg-cc-to-cv-mv = <4328>;
+		qcom,fg-auto-recharge-soc = <99>;
+
+		qcom,float-voltage-mv = <4350>;
+		qcom,iterm-ma = <100>;
+
+		/* Soft JEITA mess
+		qcom,thermal-mitigation = <1500 700 600 0>;
+		qcom,config-hard-thresholds;
+		qcom,hot-bat-decidegc = <600>;
+		qcom,cold-bat-decidegc = <0>;
+		qcom,soft-jeita-supported;
+		qcom,warm-bat-decidegc = <450>;
+		qcom,cool-bat-decidegc = <100>;
+		qcom,warm-bat-mv = <4000>;
+		qcom,cool-bat-mv = <4100>;
+		qcom,warm-bat-ma = <600>;
+		qcom,cool-bat-ma = <600>;
+		*/
+
+		// wt88047 specific JEITA mess
+		//qcom,warm-recharge-thresh-mv = <200>;
+
+		qcom,shdn-after-pwroff;
+		qcom,fg-reset-at-pon;
+		qcom,fg-reset-threshold-mv = <100>;
+
+		/* FIXME: This is battery specific */
+		qcom,fg-batt-capacity-mah = <2200>;
+		qcom,fg-cc-soc-coeff = <0x8373>;
+		qcom,thermistor-c1-coeff = <0x85D2>;
+
+		qcom,otg-batt-curr-limit = <950>;
+		usb_otg_vbus: usb-otg-vbus {};
+	};
+};
+
 &blsp_i2c5 {
 	status = "okay";
 
@@ -453,6 +507,14 @@
 			drive-strength = <2>;
 			bias-pull-down;
 		};
+	};
+
+	smb_int_default: smb_int_default {
+		pins = "gpio62";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-pull-up;
 	};
 
 	speaker_amp_default: speaker-amp-default {

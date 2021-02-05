@@ -1192,11 +1192,13 @@ static int smb1360_delayed_hw_init(struct smb1360_battery *battery)
 		return ret;
 	}
 
+	/*
 	ret = regmap_update_bits(battery->regmap, CMD_CHG_REG, CMD_CHG_EN, CMD_CHG_EN);
 	if (ret) {
 		dev_err(battery->dev, "couldn't enable battery charging: %d\n", ret);
 		return ret;
 	}
+	*/
 
 	/* Dump final registers */
 	smb1360_dump(to_i2c_client(battery->dev));
