@@ -41,6 +41,7 @@
 			.name = #_name,					      \
 			.parent_names = (const char *[]){ "xo_board" },       \
 			.num_parents = 1,				      \
+			.flags = CLK_IGNORE_UNUSED,			      \
 		},							      \
 	};								      \
 	static struct clk_smd_rpm _platform##_##_active = {		      \
@@ -56,6 +57,7 @@
 			.name = #_active,				      \
 			.parent_names = (const char *[]){ "xo_board" },	      \
 			.num_parents = 1,				      \
+			.flags = CLK_IGNORE_UNUSED,			      \
 		},							      \
 	}
 
