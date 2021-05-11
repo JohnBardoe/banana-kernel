@@ -41,51 +41,74 @@
 #define ST_ACCEL_FS_AVL_200G			200
 #define ST_ACCEL_FS_AVL_400G			400
 
+static const struct iio_mount_matrix *
+get_mount_matrix(const struct iio_dev *indio_dev,
+		 const struct iio_chan_spec *chan)
+{
+	struct st_sensor_data *adata = iio_priv(indio_dev);
+
+	return &adata->mount_matrix;
+}
+
+static const struct iio_chan_spec_ext_info mount_matrix_ext_info[] = {
+	IIO_MOUNT_MATRIX(IIO_SHARED_BY_ALL, get_mount_matrix),
+	{ },
+};
+
 static const struct iio_chan_spec st_accel_8bit_channels[] = {
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_X, 1, IIO_MOD_X, 's', IIO_LE, 8, 8,
-			ST_ACCEL_DEFAULT_OUT_X_L_ADDR+1),
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+			ST_ACCEL_DEFAULT_OUT_X_L_ADDR+1,
+			mount_matrix_ext_info),
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_Y, 1, IIO_MOD_Y, 's', IIO_LE, 8, 8,
-			ST_ACCEL_DEFAULT_OUT_Y_L_ADDR+1),
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+			ST_ACCEL_DEFAULT_OUT_Y_L_ADDR+1,
+			mount_matrix_ext_info),
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_Z, 1, IIO_MOD_Z, 's', IIO_LE, 8, 8,
-			ST_ACCEL_DEFAULT_OUT_Z_L_ADDR+1),
+			ST_ACCEL_DEFAULT_OUT_Z_L_ADDR+1,
+			mount_matrix_ext_info),
 	IIO_CHAN_SOFT_TIMESTAMP(3)
 };
 
 static const struct iio_chan_spec st_accel_12bit_channels[] = {
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_X, 1, IIO_MOD_X, 's', IIO_LE, 12, 16,
-			ST_ACCEL_DEFAULT_OUT_X_L_ADDR),
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+			ST_ACCEL_DEFAULT_OUT_X_L_ADDR,
+			mount_matrix_ext_info),
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_Y, 1, IIO_MOD_Y, 's', IIO_LE, 12, 16,
-			ST_ACCEL_DEFAULT_OUT_Y_L_ADDR),
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+			ST_ACCEL_DEFAULT_OUT_Y_L_ADDR,
+			mount_matrix_ext_info),
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_Z, 1, IIO_MOD_Z, 's', IIO_LE, 12, 16,
-			ST_ACCEL_DEFAULT_OUT_Z_L_ADDR),
+			ST_ACCEL_DEFAULT_OUT_Z_L_ADDR,
+			mount_matrix_ext_info),
 	IIO_CHAN_SOFT_TIMESTAMP(3)
 };
 
 static const struct iio_chan_spec st_accel_16bit_channels[] = {
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_X, 1, IIO_MOD_X, 's', IIO_LE, 16, 16,
-			ST_ACCEL_DEFAULT_OUT_X_L_ADDR),
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+			ST_ACCEL_DEFAULT_OUT_X_L_ADDR,
+			mount_matrix_ext_info),
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_Y, 1, IIO_MOD_Y, 's', IIO_LE, 16, 16,
-			ST_ACCEL_DEFAULT_OUT_Y_L_ADDR),
-	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+			ST_ACCEL_DEFAULT_OUT_Y_L_ADDR,
+			mount_matrix_ext_info),
+	ST_SENSORS_LSM_CHANNELS_EXT(IIO_ACCEL,
 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
 			ST_SENSORS_SCAN_Z, 1, IIO_MOD_Z, 's', IIO_LE, 16, 16,
-			ST_ACCEL_DEFAULT_OUT_Z_L_ADDR),
+			ST_ACCEL_DEFAULT_OUT_Z_L_ADDR,
+			mount_matrix_ext_info),
 	IIO_CHAN_SOFT_TIMESTAMP(3)
 };
 
@@ -1162,25 +1185,10 @@ static const struct iio_trigger_ops st_accel_trigger_ops = {
 #endif
 
 #ifdef CONFIG_ACPI
-static const struct iio_mount_matrix *
-get_mount_matrix(const struct iio_dev *indio_dev,
-		 const struct iio_chan_spec *chan)
-{
-	struct st_sensor_data *adata = iio_priv(indio_dev);
-
-	return adata->mount_matrix;
-}
-
-static const struct iio_chan_spec_ext_info mount_matrix_ext_info[] = {
-	IIO_MOUNT_MATRIX(IIO_SHARED_BY_ALL, get_mount_matrix),
-	{ },
-};
-
 /* Read ST-specific _ONT orientation data from ACPI and generate an
  * appropriate mount matrix.
  */
-static int apply_acpi_orientation(struct iio_dev *indio_dev,
-				  struct iio_chan_spec *channels)
+static bool apply_acpi_orientation(struct iio_dev *indio_dev)
 {
 	struct st_sensor_data *adata = iio_priv(indio_dev);
 	struct acpi_buffer buffer = {ACPI_ALLOCATE_BUFFER, NULL};
@@ -1188,7 +1196,7 @@ static int apply_acpi_orientation(struct iio_dev *indio_dev,
 	union acpi_object *ont;
 	union acpi_object *elements;
 	acpi_status status;
-	int ret = -EINVAL;
+	bool result = false;
 	unsigned int val;
 	int i, j;
 	int final_ont[3][3] = { { 0 }, };
@@ -1208,16 +1216,16 @@ static int apply_acpi_orientation(struct iio_dev *indio_dev,
 
 	adev = ACPI_COMPANION(adata->dev);
 	if (!adev)
-		return 0;
+		return false;
 
 	/* Read _ONT data, which should be a package of 6 integers. */
 	status = acpi_evaluate_object(adev->handle, "_ONT", NULL, &buffer);
 	if (status == AE_NOT_FOUND) {
-		return 0;
+		return false;
 	} else if (ACPI_FAILURE(status)) {
 		dev_warn(&indio_dev->dev, "failed to execute _ONT: %d\n",
 			 status);
-		return status;
+		return false;
 	}
 
 	ont = buffer.pointer;
@@ -1269,14 +1277,6 @@ static int apply_acpi_orientation(struct iio_dev *indio_dev,
 	}
 
 	/* Convert our integer matrix to a string-based iio_mount_matrix */
-	adata->mount_matrix = devm_kmalloc(&indio_dev->dev,
-					   sizeof(*adata->mount_matrix),
-					   GFP_KERNEL);
-	if (!adata->mount_matrix) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
 	for (i = 0; i < 3; i++) {
 		for (j = 0; j < 3; j++) {
 			int matrix_val = final_ont[i][j];
@@ -1295,26 +1295,23 @@ static int apply_acpi_orientation(struct iio_dev *indio_dev,
 			default:
 				goto out;
 			}
-			adata->mount_matrix->rotation[i * 3 + j] = str_value;
+			adata->mount_matrix.rotation[i * 3 + j] = str_value;
 		}
 	}
 
-	/* Expose the mount matrix via ext_info */
-	for (i = 0; i < indio_dev->num_channels; i++)
-		channels[i].ext_info = mount_matrix_ext_info;
-
-	ret = 0;
+	result = true;
 	dev_info(&indio_dev->dev, "computed mount matrix from ACPI\n");
 
 out:
+	if (!result)
+		dev_warn(&indio_dev->dev, "failed to apply ACPI orientation data\n");
 	kfree(buffer.pointer);
-	return ret;
+	return result;
 }
 #else /* !CONFIG_ACPI */
-static int apply_acpi_orientation(struct iio_dev *indio_dev,
-				  struct iio_chan_spec *channels)
+static bool apply_acpi_orientation(struct iio_dev *indio_dev)
 {
-	return 0;
+	return false;
 }
 #endif
 
@@ -1340,8 +1337,6 @@ int st_accel_common_probe(struct iio_dev *indio_dev)
 {
 	struct st_sensor_data *adata = iio_priv(indio_dev);
 	struct st_sensors_platform_data *pdata = dev_get_platdata(adata->dev);
-	struct iio_chan_spec *channels;
-	size_t channels_size;
 	int err;
 
 	indio_dev->modes = INDIO_DIRECT_MODE;
@@ -1352,20 +1347,16 @@ int st_accel_common_probe(struct iio_dev *indio_dev)
 		return err;
 
 	adata->num_data_channels = ST_ACCEL_NUMBER_DATA_CHANNELS;
+	indio_dev->channels = adata->sensor_settings->ch;
 	indio_dev->num_channels = ST_SENSORS_NUMBER_ALL_CHANNELS;
 
-	channels_size = indio_dev->num_channels * sizeof(struct iio_chan_spec);
-	channels = devm_kmemdup(&indio_dev->dev,
-				adata->sensor_settings->ch,
-				channels_size, GFP_KERNEL);
-	if (!channels)
-		return -ENOMEM;
+	if (!apply_acpi_orientation(indio_dev)) {
+		err = iio_read_mount_matrix(&indio_dev->dev, "mount-matrix",
+					    &adata->mount_matrix);
+		if (err)
+			return err;
+	}
 
-	if (apply_acpi_orientation(indio_dev, channels))
-		dev_warn(&indio_dev->dev,
-			 "failed to apply ACPI orientation data: %d\n", err);
-
-	indio_dev->channels = channels;
 	adata->current_fullscale = &adata->sensor_settings->fs.fs_avl[0];
 	adata->odr = adata->sensor_settings->odr.odr_avl[0].hz;
 
