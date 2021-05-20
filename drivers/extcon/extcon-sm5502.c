@@ -1,3 +1,4 @@
+#define DEBUG
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * extcon-sm5502.c - Silicon Mitus SM5502 extcon drvier to support USB switches
@@ -40,6 +41,7 @@ struct sm5502_muic_info {
 	struct i2c_client *i2c;
 	struct regmap *regmap;
 
+	enum sm5502_types type;
 	struct regmap_irq_chip_data *irq_data;
 	struct muic_irq *muic_irqs;
 	unsigned int num_muic_irqs;
@@ -86,6 +88,33 @@ static struct reg_data sm5502_reg_data[] = {
 			| SM5502_REG_INTM2_STUCK_KEY_MASK
 			| SM5502_REG_INTM2_STUCK_KEY_RCV_MASK
 			| SM5502_REG_INTM2_MHL_MASK,
+		.invert = true,
+	},
+};
+
+/* Default value of SM5504 register to bring up MUIC device. */
+static struct reg_data sm5504_reg_data[] = {
+	{
+		.reg = SM5502_REG_RESET,
+		.val = SM5502_REG_RESET_MASK,
+		.invert = true,
+	}, {
+		.reg = SM5502_REG_INTMASK1,
+		.val = SM5504_REG_INTM1_ATTACH_MASK
+			| SM5504_REG_INTM1_DETACH_MASK,
+		.invert = false,
+	}, {
+		.reg = SM5502_REG_INTMASK2,
+		.val = SM5504_REG_INTM2_RID_CHG_MASK
+			| SM5504_REG_INTM2_UVLO_MASK
+			| SM5504_REG_INTM2_POR_MASK,
+		.invert = true,
+	}, {
+		.reg = SM5502_REG_CONTROL,
+		.val = SM5502_REG_CONTROL_MANUAL_SW_MASK
+			| SM5504_REG_CONTROL_CHGTYP_MASK
+			| SM5504_REG_CONTROL_USBCHDEN_MASK
+			| SM5504_REG_CONTROL_ADC_EN_MASK,
 		.invert = true,
 	},
 };
@@ -198,6 +227,70 @@ static const struct regmap_irq_chip sm5502_muic_irq_chip = {
 	.num_irqs		= ARRAY_SIZE(sm5502_irqs),
 };
 
+/* List of supported interrupt for SM5504 */
+static struct muic_irq sm5504_muic_irqs[] = {
+	{ SM5504_IRQ_INT1_ATTACH,	"muic-attach" },
+	{ SM5504_IRQ_INT1_DETACH,	"muic-detach" },
+	{ SM5504_IRQ_INT1_CHG_DET,	"muic-chg-det" },
+	{ SM5504_IRQ_INT1_DCD_OUT,	"muic-dcd-out" },
+	{ SM5504_IRQ_INT1_OVP_EVENT,	"muic-ovp-event" },
+	{ SM5504_IRQ_INT1_CONNECT,	"muic-connect" },
+	{ SM5504_IRQ_INT1_ADC_CHG,	"muic-adc-chg" },
+	{ SM5504_IRQ_INT2_RID_CHG,	"muic-rid-chg" },
+	{ SM5504_IRQ_INT2_UVLO,		"muic-uvlo" },
+	{ SM5504_IRQ_INT2_POR,		"muic-por" },
+	{ SM5504_IRQ_INT2_VBUS_OVP,	"muic-vbus-ovp" },
+	{ SM5504_IRQ_INT2_VBUS_OCP,	"muic-vbus-ocp" },
+	{ SM5504_IRQ_INT2_OCP_EVENT,	"muic-ocp-event" },
+	{ SM5504_IRQ_INT2_OVP_OCP_EVENT, "muic-ovp-ocp-event" },
+};
+
+#define SM5504_IRQ_INT1_ATTACH_MASK		BIT(0)
+#define SM5504_IRQ_INT1_DETACH_MASK		BIT(1)
+#define SM5504_IRQ_INT1_CHG_DET_MASK		BIT(2)
+#define SM5504_IRQ_INT1_DCD_OUT_MASK		BIT(3)
+#define SM5504_IRQ_INT1_OVP_MASK		BIT(4)
+#define SM5504_IRQ_INT1_CONNECT_MASK		BIT(5)
+#define SM5504_IRQ_INT1_ADC_CHG_MASK		BIT(6)
+#define SM5504_IRQ_INT2_RID_CHG_MASK		BIT(0)
+#define SM5504_IRQ_INT2_UVLO_MASK		BIT(1)
+#define SM5504_IRQ_INT2_POR_MASK		BIT(2)
+#define SM5504_IRQ_INT2_VBUS_OVP_MASK		BIT(4)
+#define SM5504_IRQ_INT2_VBUS_OCP_MASK		BIT(5)
+#define SM5504_IRQ_INT2_OCP_EVENT_MASK		BIT(6)
+#define SM5504_IRQ_INT2_OVP_OCP_EVENT_MASK	BIT(7)
+
+/* Define interrupt list of SM5504 to register regmap_irq */
+static const struct regmap_irq sm5504_irqs[] = {
+	/* INT1 interrupts */
+	{ .reg_offset = 0, .mask = SM5504_IRQ_INT1_ATTACH_MASK, },
+	{ .reg_offset = 0, .mask = SM5504_IRQ_INT1_DETACH_MASK, },
+	{ .reg_offset = 0, .mask = SM5504_IRQ_INT1_CHG_DET_MASK, },
+	{ .reg_offset = 0, .mask = SM5504_IRQ_INT1_DCD_OUT_MASK, },
+	{ .reg_offset = 0, .mask = SM5504_IRQ_INT1_OVP_MASK, },
+	{ .reg_offset = 0, .mask = SM5504_IRQ_INT1_CONNECT_MASK, },
+	{ .reg_offset = 0, .mask = SM5504_IRQ_INT1_ADC_CHG_MASK, },
+
+	/* INT2 interrupts */
+	{ .reg_offset = 1, .mask = SM5504_IRQ_INT2_RID_CHG_MASK,},
+	{ .reg_offset = 1, .mask = SM5504_IRQ_INT2_UVLO_MASK, },
+	{ .reg_offset = 1, .mask = SM5504_IRQ_INT2_POR_MASK, },
+	{ .reg_offset = 1, .mask = SM5504_IRQ_INT2_VBUS_OVP_MASK, },
+	{ .reg_offset = 1, .mask = SM5504_IRQ_INT2_VBUS_OCP_MASK, },
+	{ .reg_offset = 1, .mask = SM5504_IRQ_INT2_OCP_EVENT_MASK, },
+	{ .reg_offset = 1, .mask = SM5504_IRQ_INT2_OVP_OCP_EVENT_MASK, },
+};
+
+static const struct regmap_irq_chip sm5504_muic_irq_chip = {
+	.name			= "sm5504",
+	.status_base		= SM5502_REG_INT1,
+	.mask_base		= SM5502_REG_INTMASK1,
+	.mask_invert		= false,
+	.num_regs		= 2,
+	.irqs			= sm5504_irqs,
+	.num_irqs		= ARRAY_SIZE(sm5504_irqs),
+};
+
 /* Define regmap configuration of SM5502 for I2C communication  */
 static bool sm5502_muic_volatile_reg(struct device *dev, unsigned int reg)
 {
@@ -276,8 +369,13 @@ static int sm5502_muic_set_path(struct sm5502_muic_info *info,
 /* Return cable type of attached or detached accessories */
 static unsigned int sm5502_muic_get_cable_type(struct sm5502_muic_info *info)
 {
-	unsigned int cable_type, adc, dev_type1;
+	unsigned int cable_type, adc, dev_type1, otg_dev_type1;
 	int ret;
+
+	if (info->type == TYPE_SM5504)
+		otg_dev_type1 = SM5504_REG_DEV_TYPE1_USB_OTG_MASK;
+	else
+		otg_dev_type1 = SM5502_REG_DEV_TYPE1_USB_OTG_MASK;
 
 	/* Read ADC value according to external cable or button */
 	ret = regmap_read(info->regmap, SM5502_REG_ADC, &adc);
@@ -292,6 +390,11 @@ static unsigned int sm5502_muic_get_cable_type(struct sm5502_muic_info *info)
 	 */
 	cable_type = adc & SM5502_REG_ADC_MASK;
 
+	regmap_read(info->regmap, SM5502_REG_DEV_TYPE1,
+			  &dev_type1);
+
+	dev_err(info->dev, "adc %#x, dev_type1 %#x\n", cable_type, dev_type1);
+
 	switch (cable_type) {
 	case SM5502_MUIC_ADC_GROUND:
 		ret = regmap_read(info->regmap, SM5502_REG_DEV_TYPE1,
@@ -301,14 +404,12 @@ static unsigned int sm5502_muic_get_cable_type(struct sm5502_muic_info *info)
 			return ret;
 		}
 
-		switch (dev_type1) {
-		case SM5502_REG_DEV_TYPE1_USB_OTG_MASK:
+		if (dev_type1 == otg_dev_type1) {
 			cable_type = SM5502_MUIC_ADC_GROUND_USB_OTG;
-			break;
-		default:
+		} else {
 			dev_dbg(info->dev,
-				"cannot identify the cable type: adc(0x%x), dev_type1(0x%x)\n",
-				adc, dev_type1);
+				"cannot identify the cable type: adc(0x%x), dev_type1(0x%x), otg(%#x)\n",
+				adc, dev_type1, otg_dev_type1);
 			return -EINVAL;
 		}
 		break;
@@ -358,15 +459,17 @@ static unsigned int sm5502_muic_get_cable_type(struct sm5502_muic_info *info)
 			return ret;
 		}
 
+		if (dev_type1 == otg_dev_type1) {
+			cable_type = SM5502_MUIC_ADC_OPEN_USB_OTG;
+			break;
+		}
+
 		switch (dev_type1) {
 		case SM5502_REG_DEV_TYPE1_USB_SDP_MASK:
 			cable_type = SM5502_MUIC_ADC_OPEN_USB;
 			break;
 		case SM5502_REG_DEV_TYPE1_DEDICATED_CHG_MASK:
 			cable_type = SM5502_MUIC_ADC_OPEN_TA;
-			break;
-		case SM5502_REG_DEV_TYPE1_USB_OTG_MASK:
-			cable_type = SM5502_MUIC_ADC_OPEN_USB_OTG;
 			break;
 		default:
 			dev_dbg(info->dev,
@@ -497,6 +600,34 @@ static int sm5502_parse_irq(struct sm5502_muic_info *info, int irq_type)
 	return 0;
 }
 
+static int sm5504_parse_irq(struct sm5502_muic_info *info, int irq_type)
+{
+	switch (irq_type) {
+	case SM5504_IRQ_INT1_ATTACH:
+		info->irq_attach = true;
+		break;
+	case SM5504_IRQ_INT1_DETACH:
+		info->irq_detach = true;
+		break;
+	case SM5504_IRQ_INT1_CHG_DET:
+	case SM5504_IRQ_INT1_DCD_OUT:
+	case SM5504_IRQ_INT1_OVP_EVENT:
+	case SM5504_IRQ_INT1_CONNECT:
+	case SM5504_IRQ_INT1_ADC_CHG:
+	case SM5504_IRQ_INT2_RID_CHG:
+	case SM5504_IRQ_INT2_UVLO:
+	case SM5504_IRQ_INT2_POR:
+	case SM5504_IRQ_INT2_VBUS_OVP:
+	case SM5504_IRQ_INT2_VBUS_OCP:
+	case SM5504_IRQ_INT2_OCP_EVENT:
+	case SM5504_IRQ_INT2_OVP_OCP_EVENT:
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 static irqreturn_t sm5502_muic_irq_handler(int irq, void *data)
 {
 	struct sm5502_muic_info *info = data;
@@ -506,7 +637,10 @@ static irqreturn_t sm5502_muic_irq_handler(int irq, void *data)
 		if (irq == info->muic_irqs[i].virq)
 			irq_type = info->muic_irqs[i].irq;
 
-	ret = sm5502_parse_irq(info, irq_type);
+	if (info->type == TYPE_SM5504)
+		ret = sm5504_parse_irq(info, irq_type);
+	else
+		ret = sm5502_parse_irq(info, irq_type);
 	if (ret < 0) {
 		dev_warn(info->dev, "cannot handle is interrupt:%d\n",
 				    irq_type);
@@ -550,6 +684,9 @@ static void sm5502_init_dev_type(struct sm5502_muic_info *info)
 	dev_info(info->dev, "Device type: version: 0x%x, vendor: 0x%x\n",
 			    version_id, vendor_id);
 
+	ret = regmap_read(info->regmap, SM5502_REG_CONTROL, &reg_data);
+	dev_err(info->dev, "control: %#x\n", reg_data);
+
 	/* Initiazle the register of SM5502 device to bring-up */
 	for (i = 0; i < info->num_reg_data; i++) {
 		unsigned int val = 0;
@@ -558,13 +695,19 @@ static void sm5502_init_dev_type(struct sm5502_muic_info *info)
 			val |= ~info->reg_data[i].val;
 		else
 			val = info->reg_data[i].val;
+
+		dev_err(info->dev, "write %#x = %#x\n", info->reg_data[i].reg, val);
 		regmap_write(info->regmap, info->reg_data[i].reg, val);
+
+		ret = regmap_read(info->regmap, info->reg_data[i].reg, &val);
+		dev_err(info->dev, "%#x now %#x\n", info->reg_data[i].reg, val);
 	}
 }
 
 static int sm5022_muic_i2c_probe(struct i2c_client *i2c)
 {
 	struct device_node *np = i2c->dev.of_node;
+	const struct regmap_irq_chip *irq_chip;
 	struct sm5502_muic_info *info;
 	int i, ret, irq_flags;
 
@@ -579,10 +722,26 @@ static int sm5022_muic_i2c_probe(struct i2c_client *i2c)
 	info->dev = &i2c->dev;
 	info->i2c = i2c;
 	info->irq = i2c->irq;
-	info->muic_irqs = sm5502_muic_irqs;
-	info->num_muic_irqs = ARRAY_SIZE(sm5502_muic_irqs);
-	info->reg_data = sm5502_reg_data;
-	info->num_reg_data = ARRAY_SIZE(sm5502_reg_data);
+	info->type = (enum sm5502_types)device_get_match_data(info->dev);
+
+	switch (info->type) {
+	case TYPE_SM5502:
+		irq_chip = &sm5502_muic_irq_chip;
+		info->muic_irqs = sm5502_muic_irqs;
+		info->num_muic_irqs = ARRAY_SIZE(sm5502_muic_irqs);
+		info->reg_data = sm5502_reg_data;
+		info->num_reg_data = ARRAY_SIZE(sm5502_reg_data);
+		break;
+	case TYPE_SM5504:
+		irq_chip = &sm5504_muic_irq_chip;
+		info->muic_irqs = sm5504_muic_irqs;
+		info->num_muic_irqs = ARRAY_SIZE(sm5504_muic_irqs);
+		info->reg_data = sm5504_reg_data;
+		info->num_reg_data = ARRAY_SIZE(sm5504_reg_data);
+		break;
+	default:
+		return -EINVAL;
+	}
 
 	mutex_init(&info->mutex);
 
@@ -598,8 +757,8 @@ static int sm5022_muic_i2c_probe(struct i2c_client *i2c)
 
 	/* Support irq domain for SM5502 MUIC device */
 	irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_SHARED;
-	ret = devm_regmap_add_irq_chip(info->dev, info->regmap, info->irq, irq_flags,
-				       0, &sm5502_muic_irq_chip, &info->irq_data);
+	ret = devm_regmap_add_irq_chip(info->dev, info->regmap, info->irq,
+				       irq_flags, 0, irq_chip, &info->irq_data);
 	if (ret != 0) {
 		dev_err(info->dev, "failed to request IRQ %d: %d\n",
 				    info->irq, ret);
@@ -660,7 +819,8 @@ static int sm5022_muic_i2c_probe(struct i2c_client *i2c)
 }
 
 static const struct of_device_id sm5502_dt_match[] = {
-	{ .compatible = "siliconmitus,sm5502-muic" },
+	{ .compatible = "siliconmitus,sm5502-muic", .data = (void *)TYPE_SM5502 },
+	{ .compatible = "siliconmitus,sm5504-muic", .data = (void *)TYPE_SM5504 },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, sm5502_dt_match);
@@ -692,6 +852,7 @@ static SIMPLE_DEV_PM_OPS(sm5502_muic_pm_ops,
 
 static const struct i2c_device_id sm5502_i2c_id[] = {
 	{ "sm5502", TYPE_SM5502 },
+	{ "sm5504", TYPE_SM5504 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, sm5502_i2c_id);
