@@ -131,6 +131,29 @@
 		pinctrl-0 = <&tkey_led_en_default>;
 	};
 
+	i2c-muic {
+		compatible = "i2c-gpio";
+		sda-gpios = <&msmgpio 105 (GPIO_ACTIVE_HIGH|GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&msmgpio 106 (GPIO_ACTIVE_HIGH|GPIO_OPEN_DRAIN)>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&muic_i2c_default>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		muic: extcon@14 {
+			compatible = "siliconmitus,sm5504-muic";
+			reg = <0x14>;
+
+			interrupt-parent = <&msmgpio>;
+			interrupts = <12 IRQ_TYPE_EDGE_FALLING>;
+
+			pinctrl-names = "default";
+			pinctrl-0 = <&muic_irq_default>;
+		};
+	};
+
 	i2c-tkey {
 		compatible = "i2c-gpio";
 		sda-gpios = <&msmgpio 16 (GPIO_ACTIVE_HIGH|GPIO_OPEN_DRAIN)>;
@@ -184,12 +207,6 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&nfc_default>;
 		};
-	};
-
-	// FIXME: Use extcon device provided by MUIC driver when available
-	usb_vbus: usb-vbus {
-		compatible = "linux,extcon-usb-gpio";
-		vbus-gpio = <&msmgpio 105 GPIO_ACTIVE_HIGH>;
 	};
 };
 
@@ -367,12 +384,11 @@
 
 &usb {
 	status = "okay";
-	dr_mode = "peripheral";
-	extcon = <&usb_vbus>;
+	extcon = <&muic>, <&muic>;
 };
 
 &usb_hs_phy {
-	extcon = <&usb_vbus>;
+	extcon = <&muic>;
 };
 
 &wcd_codec {
@@ -544,6 +560,22 @@
 			drive-strength = <2>;
 			bias-pull-down;
 		};
+	};
+
+	muic_i2c_default: muic-i2c-default {
+		pins = "gpio105", "gpio106";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	muic_irq_default: muic-irq-default {
+		pins = "gpio12";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
 	};
 
 	nfc_default: nfc-default {
