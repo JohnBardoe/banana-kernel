@@ -1162,6 +1162,7 @@ static const struct i2c_device_id bma180_ids[] = {
 	{ "bma150", BMA150 },
 	{ "bma180", BMA180 },
 	{ "bma250", BMA250 },
+	{ "bma253", BMA254 },
 	{ "bma254", BMA254 },
 	{ "smb380", BMA150 },
 	{ }
@@ -1185,6 +1186,10 @@ static const struct of_device_id bma180_of_match[] = {
 	{
 		.compatible = "bosch,bma250",
 		.data = (void *)BMA250
+	},
+	{
+		.compatible = "bosch,bma253",
+		.data = (void *)BMA254
 	},
 	{
 		.compatible = "bosch,bma254",
