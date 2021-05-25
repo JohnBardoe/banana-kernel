@@ -165,18 +165,17 @@
 	accelerometer@19 {
 		compatible = "bosch,bma253";
 		reg = <0x19>;
-		#address-cells = <1>;
-		#size-cells = <0>;
 
 		interrupt-parent = <&msmgpio>;
-		interrupts = <115 IRQ_TYPE_EDGE_RISING>, <119 IRQ_TYPE_EDGE_RISING>;
+		interrupts = <115 IRQ_TYPE_EDGE_RISING>,
+			     <119 IRQ_TYPE_EDGE_RISING>;
+
+		vdd-supply = <&pm8916_l17>;
+		vddio-supply = <&pm8916_l6>;
 
 		mount-matrix = "1",  "0", "0",
 			       "0", "-1", "0",
 			       "0",  "0", "1";
-
-		vdd-supply = <&pm8916_l17>;
-		vddio-supply = <&pm8916_l6>;
 
 		pinctrl-names = "default";
 		pinctrl-0 = <&accel_int_default>;
