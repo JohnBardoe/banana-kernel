@@ -1182,10 +1182,6 @@ static const struct of_device_id bma180_of_match[] = {
 		.data = (void *)BMA250
 	},
 	{
-		.compatible = "bosch,bma253",
-		.data = (void *)BMA254
-	},
-	{
 		.compatible = "bosch,bma254",
 		.data = (void *)BMA254
 	},
