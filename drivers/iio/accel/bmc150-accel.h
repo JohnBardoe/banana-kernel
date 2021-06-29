@@ -13,6 +13,11 @@ struct i2c_client;
 struct bmc150_accel_chip_info;
 struct bmc150_accel_interrupt_info;
 
+enum bmc150_type {
+	BOSCH_UNKNOWN,
+	BOSCH_BMC156,
+};
+
 struct bmc150_accel_interrupt {
 	const struct bmc150_accel_interrupt_info *info;
 	atomic_t users;
@@ -62,6 +67,7 @@ struct bmc150_accel_data {
 	int ev_enable_state;
 	int64_t timestamp, old_timestamp; /* Only used in hw fifo mode. */
 	const struct bmc150_accel_chip_info *chip_info;
+	enum bmc150_type type;
 	struct i2c_client *second_device;
 	void (*resume_callback)(struct device *dev);
 	struct delayed_work resume_work;
@@ -69,7 +75,8 @@ struct bmc150_accel_data {
 };
 
 int bmc150_accel_core_probe(struct device *dev, struct regmap *regmap, int irq,
-			    const char *name, bool block_supported);
+			    enum bmc150_type type, const char *name,
+			    bool block_supported);
 int bmc150_accel_core_remove(struct device *dev);
 extern const struct dev_pm_ops bmc150_accel_pm_ops;
 extern const struct regmap_config bmc150_regmap_conf;
