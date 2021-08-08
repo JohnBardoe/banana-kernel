@@ -96,5 +96,9 @@
 #define GCC_JPEG_TBU_BCR		87
 #define GCC_PRONTO_TBU_BCR		88
 #define GCC_SMMU_CATS_BCR		89
+#define GCC_MSS_RESTART			90
+#define GCC_WCSS_RESTART		91
+#define GCC_VENUS_RESTART		92
+#define GCC_RPM_RESET                   93
 
 #endif
