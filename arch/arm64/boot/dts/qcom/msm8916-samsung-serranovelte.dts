@@ -352,10 +352,9 @@
 	 * mmc1: tuning execution failed: -5
 	 * mmc1: error -5 whilst initialising SD card
 	 *
-	 * This is the quirk used on downstream, which suggests
-	 * this is a hardware limitation. However, I was able
-	 * to probe a card using DDR50 (without tuning),
-	 * so maybe only tuning is broken...?
+	 * This is the quirk used on downstream, which suggests this is
+	 * a hardware limitation. However, probing a card using DDR50
+	 * (without tuning), so maybe only tuning is broken?
 	 */
 	no-1-8-v;
 };
