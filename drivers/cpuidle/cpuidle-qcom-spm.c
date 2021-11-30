@@ -90,7 +90,6 @@ static int spm_cpuidle_register(struct device *cpuidle_dev, int cpu)
 	struct platform_device *pdev = NULL;
 	struct device_node *cpu_node, *saw_node;
 	struct cpuidle_qcom_spm_data *data = NULL;
-	void *entry;
 	int ret;
 
 	cpu_node = of_cpu_device_node_get(cpu);
@@ -123,12 +122,7 @@ static int spm_cpuidle_register(struct device *cpuidle_dev, int cpu)
 	if (ret <= 0)
 		return ret ? : -ENODEV;
 
-#ifdef CONFIG_ARM64
-	entry = cpu_resume;
-#else
-	entry = cpu_resume_arm;
-#endif
-	ret = qcom_scm_set_warm_boot_addr(entry, cpumask_of(cpu));
+	ret = qcom_scm_set_warm_boot_addr(cpu_resume_arm, cpumask_of(cpu));
 	if (ret)
 		return ret;
 
