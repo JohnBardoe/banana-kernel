@@ -124,11 +124,11 @@
 #define GCC_SNOC_QOSGEN_CLK             116
 
 /* Indexes for GDSCs */
-#define BIMC_GDSC				0
 #define VENUS_GDSC				1
-#define MDSS_GDSC				2
-#define VFE_GDSC				3
-#define OXILI_GDSC				4
+#define VENUS_CORE0_GDSC        2
+#define MDSS_GDSC				3
+#define VFE_GDSC				4
+#define OXILI_GX_GDSC				5
 
 
 #endif
