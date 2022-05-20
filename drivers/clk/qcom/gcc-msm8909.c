@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright (c) 2014-2016, 2018, The Linux Foundation. All rights reserved.
+ *
+ * Based on gcc-msm8916:
  * Copyright 2015 Linaro Limited
  */
 
@@ -2209,7 +2212,7 @@ static struct clk_regmap *gcc_msm8909_clocks[] = {
 	[GCC_BLSP1_UART2_APPS_CLK_SRC] = &gcc_blsp1_uart2_apps_clk.clkr,
 	[GCC_BOOT_ROM_AHB_CLK] = &gcc_boot_rom_ahb_clk.clkr,
 	[GCC_CAMSS_CSI0_AHB_CLK] = &gcc_camss_csi0_ahb_clk.clkr,
-	[GCC_CAMSS_CSI0_CLK] = &gcc_camss_csi0_clk.clkr, 
+	[GCC_CAMSS_CSI0_CLK] = &gcc_camss_csi0_clk.clkr,
 	[GCC_CAMSS_CSI0PHY_CLK] = &gcc_camss_csi0phy_clk.clkr,
 	[GCC_CAMSS_CSI0PIX_CLK] = &gcc_camss_csi0pix_clk.clkr,
 	[GCC_CAMSS_CSI0RDI_CLK] = &gcc_camss_csi0rdi_clk.clkr,
