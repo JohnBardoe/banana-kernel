@@ -48,6 +48,8 @@
 			#reset-cells = <1>;
 			#power-domain-cells = <1>;
 			reg = <0x01800000 0x80000>;
+			clocks = <&xo_board>, <&sleep_clk>;
+			clock-names = "xo", "sleep_clk";
 		};
 
 		intc: interrupt-controller@b000000 {
