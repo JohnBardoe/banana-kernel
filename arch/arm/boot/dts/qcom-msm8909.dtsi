@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2022, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  */
-
 /dts-v1/;
 
 #include <dt-bindings/clock/qcom,gcc-msm8909.h>
@@ -14,29 +13,35 @@
 	#address-cells = <1>;
 	#size-cells = <1>;
 	interrupt-parent = <&intc>;
-	
+
+	aliases {
+		mmc0 = &sdhc_1; /* SDC1 eMMC slot */
+		mmc1 = &sdhc_2; /* SDC2 SD card slot */
+	};
+
 	chosen { };
 
 	clocks {
-		xo_board: xo_board {
+		xo_board: xo-board {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <19200000>;
 		};
 
-		sleep_clk: sleep_clk {
+		sleep_clk: sleep-clk {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <32768>;
 		};
 	};
 
-	memory@0 {
+	memory@80000000 {
 		device_type = "memory";
-		reg = <0x0 0x0>;
+		/* We expect the bootloader to fill in the reg */
+		reg = <0x80000000 0x0>;
 	};
 
-	soc: soc {
+	soc: soc@0 {
 		compatible = "simple-bus";
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -44,10 +49,10 @@
 
 		gcc: clock-controller@1800000 {
 			compatible = "qcom,gcc-msm8909";
+			reg = <0x01800000 0x80000>;
 			#clock-cells = <1>;
 			#reset-cells = <1>;
 			#power-domain-cells = <1>;
-			reg = <0x01800000 0x80000>;
 			clocks = <&xo_board>, <&sleep_clk>;
 			clock-names = "xo", "sleep_clk";
 		};
@@ -59,24 +64,23 @@
 			interrupt-controller;
 			#interrupt-cells = <3>;
 		};
-		
-		restart@fc4ab000 {
+
+		restart@4ab000 {
 			compatible = "qcom,pshold";
-			reg = <0x4ab000 0x4>,
-			      <0x193d100 0x4>;
+			reg = <0x4ab000 0x4>;
 		};
-		
+
 		sdhc_1: sdhci@7824000 {
 			compatible = "qcom,msm8909-sdhci", "qcom,sdhci-msm-v4";
 			reg = <0x07824900 0x11c>, <0x07824000 0x800>;
 			reg-names = "hc_mem", "core_mem";
 
 			interrupts = <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>,
-				   		 <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>;
+				     <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "hc_irq", "pwr_irq";
 			clocks = <&gcc GCC_SDCC1_APPS_CLK>,
-					 <&gcc GCC_SDCC1_AHB_CLK>,
-				 	 <&xo_board>;
+				 <&gcc GCC_SDCC1_AHB_CLK>,
+				 <&xo_board>;
 			clock-names = "core", "iface", "xo";
 
 			pinctrl-names = "default", "sleep";
@@ -96,13 +100,13 @@
 			reg-names = "hc_mem", "core_mem";
 
 			interrupts = <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>,
-				    	 <GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>;
+				     <GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "hc_irq", "pwr_irq";
 			clocks = <&gcc GCC_SDCC2_APPS_CLK>,
-					 <&gcc GCC_SDCC2_AHB_CLK>,
-					 <&xo_board>;
+				 <&gcc GCC_SDCC2_AHB_CLK>,
+				 <&xo_board>;
 			clock-names = "core", "iface", "xo";
-			
+
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&sdc2_clk_on &sdc2_cmd_on &sdc2_data_on>;
 			pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off>;
@@ -113,11 +117,10 @@
 
 		timer {
 			compatible = "arm,armv7-timer";
-			interrupts = <GIC_PPI 2 0xf08>,
-				    	 <GIC_PPI 3 0xf08>,
-				     	 <GIC_PPI 4 0xf08>,
-			     	 	 <GIC_PPI 1 0xf08>;
-			clock-frequency = <19200000>;
+			interrupts = <GIC_PPI 2 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
+				     <GIC_PPI 3 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
+				     <GIC_PPI 4 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
+				     <GIC_PPI 1 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>;
 		};
 
 		tlmm: pinctrl@1000000 {
@@ -129,7 +132,7 @@
 			gpio-ranges = <&tlmm 0 0 117>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
-			
+
 			sdc1_clk_on: sdc1-clk-on-pins {
 				pins = "sdc1_clk";
 				bias-disable;
