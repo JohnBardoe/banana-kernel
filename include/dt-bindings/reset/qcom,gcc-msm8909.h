@@ -11,4 +11,5 @@
 #define GCC_QUSB2_PHY_BCR           3
 #define GCC_MDSS_BCR                4
 #define GCC_CAMSS_VFE_BCR           5
+#define GCC_MSS_RESTART		    6
 #endif

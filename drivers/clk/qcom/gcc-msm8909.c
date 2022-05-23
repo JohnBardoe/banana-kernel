@@ -1869,8 +1869,9 @@ static struct clk_branch gcc_gtcu_ahb_clk = {
 
 static struct clk_branch gcc_usb2a_phy_sleep_clk = {
 	.halt_reg = 0x4102c,
-	.halt_check = BRANCH_HALT_VOTED,
 	.clkr = {
+		.enable_reg = 0x4102c,
+		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gcc_usb2a_phy_sleep_clk",
 			.ops = &clk_branch2_ops,
@@ -1880,8 +1881,9 @@ static struct clk_branch gcc_usb2a_phy_sleep_clk = {
 
 static struct clk_branch gcc_usb_hs_phy_cfg_ahb_clk = {
 	.halt_reg = 0x41030,
-	.halt_check = BRANCH_HALT_VOTED,
 	.clkr = {
+		.enable_reg = 0x41030,
+		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gcc_usb_hs_phy_cfg_ahb_clk",
 			.ops = &clk_branch2_ops,
@@ -1891,8 +1893,9 @@ static struct clk_branch gcc_usb_hs_phy_cfg_ahb_clk = {
 
 static struct clk_branch gcc_usb_hs_ahb_clk = {
 	.halt_reg = 0x41008,
-	.halt_check = BRANCH_HALT_VOTED,
 	.clkr = {
+		.enable_reg = 0x41008,
+		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gcc_usb_hs_ahb_clk",
 			.ops = &clk_branch2_ops,
@@ -1901,9 +1904,10 @@ static struct clk_branch gcc_usb_hs_ahb_clk = {
 };
 
 static struct clk_branch gcc_usb_hs_system_clk = {
-	.halt_reg = 0x41008,
-	.halt_check = BRANCH_HALT_VOTED,
+	.halt_reg = 0x41004,
 	.clkr = {
+		.enable_reg = 0x41004,
+		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data) {
 			.name = "gcc_usb_hs_system_clk",
 			.ops = &clk_branch2_ops,
@@ -2291,6 +2295,7 @@ static const struct qcom_reset_map gcc_msm8909_resets[] = {
 	[GCC_QUSB2_PHY_BCR] = { 0x4103C },
 	[GCC_MDSS_BCR] = { 0x4d074 },
 	[GCC_CAMSS_VFE_BCR] = { 0x58030 },
+	[GCC_MSS_RESTART] = { 0x3e000 },
 };
 
 static const struct regmap_config gcc_msm8909_regmap_config = {
